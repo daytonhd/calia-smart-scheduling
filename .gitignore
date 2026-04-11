@@ -1,7 +1,31 @@
-backend/venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+backend/venv/
+
+# Environment variables
 .env
-.DS_Store
-.next/
+
+# Alembic
+backend/alembic/versions/__pycache__/
+
+# Node / Next.js
 node_modules/
+.next/
+out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
