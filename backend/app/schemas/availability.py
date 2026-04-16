@@ -29,6 +29,24 @@ class AvailabilityCreate(SQLModel):
         return self
 
 
+class AvailabilityUpdate(SQLModel):
+    """Request body for updating an availability window. All fields optional."""
+
+    weekday: Optional[int] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_window(self):
+        if self.weekday is not None and (self.weekday < 0 or self.weekday > 6):
+            raise ValueError("weekday must be between 0 (Monday) and 6 (Sunday)")
+        if self.start_time is not None and self.end_time is not None:
+            if self.start_time >= self.end_time:
+                raise ValueError("start_time must be before end_time")
+        return self
+
+
 class AvailabilityRead(SQLModel):
     """Response body for an availability window."""
 

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.routers import calendars, events
 from app.routers import availability
+from app.routers import blocked_times
 
 app = FastAPI(
     title="Smart Scheduling API",
@@ -11,6 +12,7 @@ app = FastAPI(
 app.include_router(calendars.router)
 app.include_router(events.router)
 app.include_router(availability.router)
+app.include_router(blocked_times.router)
 
 
 @app.get("/health")
