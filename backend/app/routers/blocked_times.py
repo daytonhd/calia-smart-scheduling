@@ -1,7 +1,7 @@
 """CRUD endpoints for blocked times."""
 
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -26,12 +26,22 @@ def create_blocked_time(body: BlockedTimeCreate, session: Session = Depends(get_
 
 
 @router.get("/", response_model=List[BlockedTimeRead])
-def list_blocked_times(session: Session = Depends(get_session)):
-    query = (
-        select(BlockedTime)
-        .where(BlockedTime.user_id == MVP_USER_ID)
-        .order_by(BlockedTime.start_time)
-    )
+def list_blocked_times(
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    session: Session = Depends(get_session),
+):
+    if start_time is not None and end_time is not None and start_time >= end_time:
+        raise HTTPException(status_code=400, detail="start_time must be before end_time")
+
+    query = select(BlockedTime).where(BlockedTime.user_id == MVP_USER_ID)
+
+    if start_time is not None:
+        query = query.where(BlockedTime.end_time > start_time)
+    if end_time is not None:
+        query = query.where(BlockedTime.start_time < end_time)
+
+    query = query.order_by(BlockedTime.start_time)
     return session.exec(query).all()
 
 
