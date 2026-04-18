@@ -1,6 +1,6 @@
 """Schemas for schedule-related endpoints."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import model_validator
@@ -34,3 +34,33 @@ class ConflictCheckResponse(SQLModel):
 
     has_conflicts: bool
     conflicts: List[ConflictDetail]
+
+
+class SuggestSlotsRequest(SQLModel):
+    """Request body for POST /schedule/suggest-slots."""
+
+    duration_minutes: int
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    max_results: int = 10
+
+    @model_validator(mode="after")
+    def validate_fields(self):
+        if self.duration_minutes < 1:
+            raise ValueError("duration_minutes must be at least 1")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date must not be after end_date")
+        return self
+
+
+class SlotSuggestion(SQLModel):
+    """A single available time slot."""
+
+    start_time: datetime
+    end_time: datetime
+
+
+class SuggestSlotsResponse(SQLModel):
+    """Response for POST /schedule/suggest-slots."""
+
+    slots: List[SlotSuggestion]

@@ -9,7 +9,7 @@ Three conflict types are checked:
 Touching boundaries (end_a == start_b) are NOT considered overlap.
 """
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 from app.models.availability_window import AvailabilityWindow
 from app.models.blocked_time import BlockedTime
 from app.models.event import Event
-from app.schemas.schedule import ConflictDetail
+from app.schemas.schedule import ConflictDetail, SlotSuggestion
 
 # Single-user MVP — all blocked times and availability windows belong to this user.
 MVP_USER_ID = 1
@@ -160,3 +160,68 @@ def check_all_conflicts(
     conflicts.extend(_check_blocked_time_overlap(start_time, end_time, session))
     conflicts.extend(_check_availability(start_time, end_time, session))
     return conflicts
+
+
+def find_available_slots(
+    duration_minutes: int,
+    start_date: date,
+    end_date: date,
+    max_results: int,
+    session: Session,
+) -> List[SlotSuggestion]:
+    """Return up to max_results conflict-free slots of the requested duration.
+
+    Scans each day in [start_date, end_date] in order. For each day, iterates
+    through active availability windows for that weekday in 30-minute increments.
+    A candidate slot is valid when check_all_conflicts returns empty.
+
+    Args:
+        duration_minutes:  Required slot length in minutes (>= 1).
+        start_date:        First day to scan (inclusive).
+        end_date:          Last day to scan (inclusive).
+        max_results:       Maximum number of slots to return.
+        session:           Active database session.
+
+    Returns:
+        List of SlotSuggestion ordered earliest first. Empty if none found.
+    """
+    slot_duration = timedelta(minutes=duration_minutes)
+    increment = timedelta(minutes=30)
+    results: List[SlotSuggestion] = []
+
+    current_date = start_date
+    while current_date <= end_date and len(results) < max_results:
+        weekday = current_date.weekday()
+
+        windows = session.exec(
+            select(AvailabilityWindow).where(
+                AvailabilityWindow.user_id == MVP_USER_ID,
+                AvailabilityWindow.weekday == weekday,
+                AvailabilityWindow.active == True,  # noqa: E712
+            )
+        ).all()
+
+        for window in windows:
+            if len(results) >= max_results:
+                break
+
+            window_start = datetime.combine(current_date, window.start_time)
+            window_end = datetime.combine(current_date, window.end_time)
+            candidate_start = window_start
+
+            while candidate_start + slot_duration <= window_end:
+                candidate_end = candidate_start + slot_duration
+
+                if not check_all_conflicts(candidate_start, candidate_end, session):
+                    results.append(SlotSuggestion(
+                        start_time=candidate_start,
+                        end_time=candidate_end,
+                    ))
+                    if len(results) >= max_results:
+                        break
+
+                candidate_start += increment
+
+        current_date += timedelta(days=1)
+
+    return results

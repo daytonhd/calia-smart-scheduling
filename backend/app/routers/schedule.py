@@ -1,11 +1,18 @@
-"""Schedule endpoints — conflict checking for proposed event placements."""
+"""Schedule endpoints — conflict checking and slot suggestions."""
+
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from app.database import get_session
-from app.schemas.schedule import ConflictCheckRequest, ConflictCheckResponse
-from app.services.conflict_detection import check_all_conflicts
+from app.schemas.schedule import (
+    ConflictCheckRequest,
+    ConflictCheckResponse,
+    SuggestSlotsRequest,
+    SuggestSlotsResponse,
+)
+from app.services.conflict_detection import check_all_conflicts, find_available_slots
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -30,3 +37,29 @@ def check_conflict(
         has_conflicts=len(conflicts) > 0,
         conflicts=conflicts,
     )
+
+
+@router.post("/suggest-slots", response_model=SuggestSlotsResponse)
+def suggest_slots(
+    body: SuggestSlotsRequest,
+    session: Session = Depends(get_session),
+):
+    """Return up to max_results conflict-free time slots of the requested duration.
+
+    Scans availability windows in 30-minute increments over the given date range
+    (defaults to the next 7 days). Returns earliest valid slots first.
+    A slot is valid when it has no event overlap, no blocked-time overlap, and is
+    fully contained within an active availability window.
+    """
+    today = date.today()
+    start = body.start_date or today
+    end = body.end_date or (start + timedelta(days=6))
+
+    slots = find_available_slots(
+        duration_minutes=body.duration_minutes,
+        start_date=start,
+        end_date=end,
+        max_results=body.max_results,
+        session=session,
+    )
+    return SuggestSlotsResponse(slots=slots)
