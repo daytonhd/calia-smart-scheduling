@@ -10,6 +10,7 @@ from app.database import get_session
 from app.models.calendar import Calendar
 from app.models.event import Event
 from app.schemas.event import EventCreate, EventRead, EventUpdate
+from app.services.conflict_detection import check_all_conflicts
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -23,6 +24,13 @@ def _ensure_calendar_exists(calendar_id: int, session: Session) -> None:
 @router.post("/", response_model=EventRead, status_code=status.HTTP_201_CREATED)
 def create_event(body: EventCreate, session: Session = Depends(get_session)):
     _ensure_calendar_exists(body.calendar_id, session)
+
+    conflicts = check_all_conflicts(body.start_time, body.end_time, session)
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail={"conflicts": [c.model_dump() for c in conflicts]},
+        )
 
     event = Event(**body.model_dump())
     session.add(event)
@@ -74,6 +82,13 @@ def update_event(
         raise HTTPException(
             status_code=422,
             detail="start_time must be before end_time",
+        )
+
+    conflicts = check_all_conflicts(new_start, new_end, session, exclude_event_id=event_id)
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail={"conflicts": [c.model_dump() for c in conflicts]},
         )
 
     for field, value in updates.items():
