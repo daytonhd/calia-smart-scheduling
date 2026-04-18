@@ -9,8 +9,8 @@ Three conflict types are checked:
 Touching boundaries (end_a == start_b) are NOT considered overlap.
 """
 
-from datetime import date, datetime, timedelta
-from typing import List, Optional
+from datetime import date, datetime, time, timedelta
+from typing import List, NamedTuple, Optional, Tuple
 
 from sqlmodel import Session, select
 
@@ -18,6 +18,14 @@ from app.models.availability_window import AvailabilityWindow
 from app.models.blocked_time import BlockedTime
 from app.models.event import Event
 from app.schemas.schedule import ConflictDetail, SlotSuggestion
+
+
+class FreeWindow(NamedTuple):
+    """A maximal interval in which the user is free (inside availability, not
+    overlapped by any event or blocked time)."""
+
+    start_time: datetime
+    end_time: datetime
 
 # Single-user MVP — all blocked times and availability windows belong to this user.
 MVP_USER_ID = 1
@@ -160,6 +168,114 @@ def check_all_conflicts(
     conflicts.extend(_check_blocked_time_overlap(start_time, end_time, session))
     conflicts.extend(_check_availability(start_time, end_time, session))
     return conflicts
+
+
+def _subtract_intervals(
+    start: datetime,
+    end: datetime,
+    occupied: List[Tuple[datetime, datetime]],
+) -> List[Tuple[datetime, datetime]]:
+    """Subtract occupied intervals from [start, end] and return maximal free gaps.
+
+    Touching boundaries (gap end == next start) are preserved as a zero-length
+    separator, not merged — but zero-length gaps are never emitted.
+    """
+    clipped: List[Tuple[datetime, datetime]] = []
+    for o_start, o_end in occupied:
+        s = max(o_start, start)
+        e = min(o_end, end)
+        if s < e:
+            clipped.append((s, e))
+
+    clipped.sort(key=lambda x: x[0])
+
+    merged: List[Tuple[datetime, datetime]] = []
+    for s, e in clipped:
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+
+    result: List[Tuple[datetime, datetime]] = []
+    cursor = start
+    for s, e in merged:
+        if cursor < s:
+            result.append((cursor, s))
+        cursor = max(cursor, e)
+    if cursor < end:
+        result.append((cursor, end))
+    return result
+
+
+def find_free_windows(
+    start_date: date,
+    end_date: date,
+    session: Session,
+) -> List[FreeWindow]:
+    """Return maximal free intervals across [start_date, end_date].
+
+    For each day:
+      1. Collect active availability windows for that weekday.
+      2. Collect events and blocked times that overlap the day.
+      3. For each availability window, subtract the union of occupied intervals
+         and emit the remaining free sub-intervals.
+
+    This is a reusable lower-level helper — slot-fitting logic can layer on top
+    by walking the returned windows. It does not enforce any slot duration or
+    grid alignment; callers decide how to consume free intervals.
+
+    Returns:
+        Free windows ordered earliest-first. Empty list if no availability
+        exists in the range.
+    """
+    results: List[FreeWindow] = []
+    current_date = start_date
+
+    while current_date <= end_date:
+        weekday = current_date.weekday()
+
+        windows = session.exec(
+            select(AvailabilityWindow).where(
+                AvailabilityWindow.user_id == MVP_USER_ID,
+                AvailabilityWindow.weekday == weekday,
+                AvailabilityWindow.active == True,  # noqa: E712
+            )
+        ).all()
+
+        if not windows:
+            current_date += timedelta(days=1)
+            continue
+
+        day_start = datetime.combine(current_date, time.min)
+        day_end = datetime.combine(current_date + timedelta(days=1), time.min)
+
+        events = session.exec(
+            select(Event).where(
+                Event.start_time < day_end,
+                Event.end_time > day_start,
+            )
+        ).all()
+        blocked = session.exec(
+            select(BlockedTime).where(
+                BlockedTime.user_id == MVP_USER_ID,
+                BlockedTime.start_time < day_end,
+                BlockedTime.end_time > day_start,
+            )
+        ).all()
+
+        occupied: List[Tuple[datetime, datetime]] = [
+            (e.start_time, e.end_time) for e in events
+        ] + [(bt.start_time, bt.end_time) for bt in blocked]
+
+        for window in windows:
+            w_start = datetime.combine(current_date, window.start_time)
+            w_end = datetime.combine(current_date, window.end_time)
+            for s, e in _subtract_intervals(w_start, w_end, occupied):
+                results.append(FreeWindow(start_time=s, end_time=e))
+
+        current_date += timedelta(days=1)
+
+    return results
 
 
 def find_available_slots(
