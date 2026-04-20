@@ -16,6 +16,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <h1 className="site-title">Smart Scheduling</h1>
           <nav className="site-nav" aria-label="primary">
             <Link href="/">Home</Link>
+            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/events">Events</Link>
           </nav>
         </header>
         <main className="site-main">{children}</main>
