@@ -1,8 +1,9 @@
 """Schedule endpoints — conflict checking and slot suggestions."""
 
 from datetime import date, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.database import get_session
@@ -11,8 +12,10 @@ from app.schemas.schedule import (
     ConflictCheckResponse,
     SuggestSlotsRequest,
     SuggestSlotsResponse,
+    WeeklyMetricsResponse,
 )
 from app.services.conflict_detection import check_all_conflicts, find_available_slots
+from app.services.metrics import compute_weekly_metrics
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -63,3 +66,21 @@ def suggest_slots(
         session=session,
     )
     return SuggestSlotsResponse(slots=slots)
+
+
+@router.get("/metrics", response_model=WeeklyMetricsResponse)
+def weekly_metrics(
+    week_start: Optional[date] = Query(
+        default=None,
+        description=(
+            "Any date inside the target week; snapped to that week's Monday. "
+            "Defaults to the current week."
+        ),
+    ),
+    session: Session = Depends(get_session),
+):
+    """Return weekly scheduling metrics for the single MVP user.
+
+    Counts and minutes are clipped to the target week [Mon 00:00, next Mon 00:00).
+    """
+    return compute_weekly_metrics(session=session, week_start=week_start)

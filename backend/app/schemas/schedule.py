@@ -64,3 +64,16 @@ class SuggestSlotsResponse(SQLModel):
     """Response for POST /schedule/suggest-slots."""
 
     slots: List[SlotSuggestion]
+
+
+class WeeklyMetricsResponse(SQLModel):
+    """Response for GET /schedule/metrics — weekly scheduling facts."""
+
+    week_start: date
+    week_end: date
+    total_events: int
+    total_blocked_times: int
+    total_scheduled_minutes: int
+    total_blocked_minutes: int
+    busiest_day: Optional[date] = None
+    busiest_day_minutes: int
