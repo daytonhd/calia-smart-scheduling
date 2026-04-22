@@ -1,8 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, getWeeklyMetrics, listEvents } from "@/lib/api";
-import type { Event, WeeklyMetrics } from "@/lib/types";
+import {
+  ApiError,
+  getWeeklyMetrics,
+  getWeeklySummary,
+  listBlockedTimes,
+  listEvents,
+} from "@/lib/api";
+import type {
+  BlockedTime,
+  Event,
+  ScheduleSummary,
+  WeeklyMetrics,
+} from "@/lib/types";
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -14,9 +25,28 @@ function formatDateTime(iso: string): string {
   });
 }
 
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// Returns [startOfTodayISO, startOfTomorrowISO] as ISO strings in local time.
+function todayWindowIso(): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
-  const [upcoming, setUpcoming] = useState<Event[]>([]);
+  const [todayEvents, setTodayEvents] = useState<Event[]>([]);
+  const [todayBlocked, setTodayBlocked] = useState<BlockedTime[]>([]);
+  const [summary, setSummary] = useState<ScheduleSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,22 +54,23 @@ export default function DashboardPage() {
     let cancelled = false;
 
     async function load() {
+      const { start, end } = todayWindowIso();
+
       setLoading(true);
       setError(null);
       try {
-        const [m, events] = await Promise.all([
+        const [m, ev, bt, ws] = await Promise.all([
           getWeeklyMetrics(),
-          listEvents(),
+          listEvents({ startTime: start, endTime: end }),
+          listBlockedTimes({ startTime: start, endTime: end }),
+          getWeeklySummary(),
         ]);
         if (cancelled) return;
 
-        const now = Date.now();
-        const next = events
-          .filter((e) => new Date(e.end_time).getTime() >= now)
-          .slice(0, 10);
-
         setMetrics(m);
-        setUpcoming(next);
+        setTodayEvents(ev);
+        setTodayBlocked(bt);
+        setSummary(ws);
       } catch (e) {
         if (cancelled) return;
         const msg =
@@ -103,26 +134,53 @@ export default function DashboardPage() {
             />
           </div>
 
-          <h3 style={{ marginTop: "2rem" }}>Upcoming events</h3>
-          {upcoming.length === 0 ? (
-            <p className="muted">No upcoming events.</p>
+          <h3 style={{ marginTop: "2rem" }}>Today&apos;s schedule</h3>
+          {todayEvents.length === 0 ? (
+            <p className="muted">No events today.</p>
           ) : (
             <ul className="event-list">
-              {upcoming.map((e) => (
+              {todayEvents.map((e) => (
                 <li key={e.id}>
                   <strong>{e.title}</strong>
                   <span className="muted">
                     {" — "}
-                    {formatDateTime(e.start_time)} →{" "}
-                    {formatDateTime(e.end_time)}
+                    {formatTime(e.start_time)} → {formatTime(e.end_time)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* TODO: today's schedule, blocked times panel, and saved weekly AI
-              summary are not yet supported by dedicated backend endpoints. */}
+          <h3 style={{ marginTop: "2rem" }}>Today&apos;s blocked times</h3>
+          {todayBlocked.length === 0 ? (
+            <p className="muted">No blocked times today.</p>
+          ) : (
+            <ul className="event-list">
+              {todayBlocked.map((b) => (
+                <li key={b.id}>
+                  <strong>{b.title}</strong>
+                  <span className="muted">
+                    {" — "}
+                    {formatTime(b.start_time)} → {formatTime(b.end_time)}
+                    {b.reason ? ` · ${b.reason}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h3 style={{ marginTop: "2rem" }}>Weekly AI summary</h3>
+          {summary ? (
+            <article className="summary-card">
+              <div className="muted">
+                Week of {summary.week_start} · generated{" "}
+                {formatDateTime(summary.created_at)}
+              </div>
+              <p style={{ whiteSpace: "pre-wrap" }}>{summary.generated_text}</p>
+            </article>
+          ) : (
+            <p className="muted">No saved summary for this week yet.</p>
+          )}
         </>
       )}
     </section>

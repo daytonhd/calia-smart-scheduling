@@ -42,11 +42,26 @@ def create_event(body: EventCreate, session: Session = Depends(get_session)):
 @router.get("/", response_model=List[EventRead])
 def list_events(
     calendar_id: Optional[int] = Query(default=None, description="Filter by calendar"),
+    start_time: Optional[datetime] = Query(
+        default=None,
+        description="Return events that overlap [start_time, end_time). Both required together.",
+    ),
+    end_time: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
 ):
-    query = select(Event).order_by(Event.start_time)
+    if start_time is not None and end_time is not None and start_time >= end_time:
+        raise HTTPException(status_code=400, detail="start_time must be before end_time")
+
+    query = select(Event)
     if calendar_id is not None:
         query = query.where(Event.calendar_id == calendar_id)
+    # Half-open overlap window: event.end > start AND event.start < end.
+    if start_time is not None:
+        query = query.where(Event.end_time > start_time)
+    if end_time is not None:
+        query = query.where(Event.start_time < end_time)
+
+    query = query.order_by(Event.start_time)
     return session.exec(query).all()
 
 

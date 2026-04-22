@@ -77,3 +77,13 @@ class WeeklyMetricsResponse(SQLModel):
     total_blocked_minutes: int
     busiest_day: Optional[date] = None
     busiest_day_minutes: int
+
+
+class ScheduleSummaryRead(SQLModel):
+    """Response for GET /schedule/weekly-summary — a stored AI summary."""
+
+    id: int
+    user_id: int
+    week_start: date
+    generated_text: str
+    created_at: datetime

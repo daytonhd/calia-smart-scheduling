@@ -3,12 +3,14 @@
 
 import { API_BASE_URL } from "./config";
 import type {
+  BlockedTime,
   Calendar,
   CalendarCreate,
   CalendarUpdate,
   Event,
   EventCreate,
   EventUpdate,
+  ScheduleSummary,
   WeeklyMetrics,
 } from "./types";
 
@@ -94,9 +96,42 @@ export function deleteCalendar(id: number): Promise<void> {
 
 // ----- Events -----
 
-export function listEvents(calendarId?: number): Promise<Event[]> {
-  const qs = calendarId != null ? `?calendar_id=${calendarId}` : "";
-  return request<Event[]>(`/events/${qs}`);
+export interface ListEventsParams {
+  calendarId?: number;
+  startTime?: string; // ISO datetime
+  endTime?: string;   // ISO datetime
+}
+
+export function listEvents(params?: ListEventsParams | number): Promise<Event[]> {
+  // Back-compat: allow a bare calendar_id argument.
+  const p: ListEventsParams =
+    typeof params === "number" ? { calendarId: params } : params ?? {};
+
+  const qs = new URLSearchParams();
+  if (p.calendarId != null) qs.set("calendar_id", String(p.calendarId));
+  if (p.startTime) qs.set("start_time", p.startTime);
+  if (p.endTime) qs.set("end_time", p.endTime);
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<Event[]>(`/events/${suffix}`);
+}
+
+// ----- Blocked times -----
+
+export interface ListBlockedTimesParams {
+  startTime?: string; // ISO datetime
+  endTime?: string;   // ISO datetime
+}
+
+export function listBlockedTimes(
+  params?: ListBlockedTimesParams
+): Promise<BlockedTime[]> {
+  const qs = new URLSearchParams();
+  if (params?.startTime) qs.set("start_time", params.startTime);
+  if (params?.endTime) qs.set("end_time", params.endTime);
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<BlockedTime[]>(`/blocked-times/${suffix}`);
 }
 
 export function createEvent(body: EventCreate): Promise<Event> {
@@ -121,4 +156,20 @@ export function deleteEvent(id: number): Promise<void> {
 
 export function getWeeklyMetrics(): Promise<WeeklyMetrics> {
   return request<WeeklyMetrics>("/schedule/metrics");
+}
+
+// ----- Saved weekly AI summary -----
+
+export async function getWeeklySummary(
+  weekStart?: string
+): Promise<ScheduleSummary | null> {
+  const qs = weekStart ? `?week_start=${weekStart}` : "";
+  try {
+    return await request<ScheduleSummary>(`/schedule/weekly-summary${qs}`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      return null;
+    }
+    throw e;
+  }
 }

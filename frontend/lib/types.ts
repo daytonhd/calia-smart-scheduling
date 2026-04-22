@@ -53,6 +53,26 @@ export interface EventUpdate {
   end_time?: string;
 }
 
+export interface BlockedTime {
+  id: number;
+  user_id: number;
+  title: string;
+  reason: string | null;
+  notes: string | null;
+  start_time: string; // ISO datetime
+  end_time: string;   // ISO datetime
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleSummary {
+  id: number;
+  user_id: number;
+  week_start: string;   // ISO date
+  generated_text: string;
+  created_at: string;   // ISO datetime
+}
+
 export interface WeeklyMetrics {
   week_start: string;         // ISO date
   week_end: string;           // ISO date

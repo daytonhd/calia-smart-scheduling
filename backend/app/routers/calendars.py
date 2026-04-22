@@ -14,6 +14,14 @@ router = APIRouter(prefix="/calendars", tags=["calendars"])
 
 @router.post("/", response_model=CalendarRead, status_code=status.HTTP_201_CREATED)
 def create_calendar(body: CalendarCreate, session: Session = Depends(get_session)):
+    # Calendar names are treated as unique in the single-user MVP — the seed
+    # script relies on the same invariant (idempotent-by-name).
+    existing = session.exec(select(Calendar).where(Calendar.name == body.name)).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Calendar named {body.name!r} already exists",
+        )
     calendar = Calendar(**body.model_dump())
     session.add(calendar)
     session.commit()
@@ -45,6 +53,19 @@ def update_calendar(
         raise HTTPException(status_code=404, detail="Calendar not found")
 
     updates = body.model_dump(exclude_unset=True)
+
+    # If the name is being changed, keep the unique-by-name invariant.
+    new_name = updates.get("name")
+    if new_name is not None and new_name != calendar.name:
+        clash = session.exec(
+            select(Calendar).where(Calendar.name == new_name)
+        ).first()
+        if clash:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Calendar named {new_name!r} already exists",
+            )
+
     for field, value in updates.items():
         setattr(calendar, field, value)
 

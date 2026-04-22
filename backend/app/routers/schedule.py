@@ -3,19 +3,21 @@
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select
 
 from app.database import get_session
+from app.models.schedule_summary import ScheduleSummary
 from app.schemas.schedule import (
     ConflictCheckRequest,
     ConflictCheckResponse,
+    ScheduleSummaryRead,
     SuggestSlotsRequest,
     SuggestSlotsResponse,
     WeeklyMetricsResponse,
 )
-from app.services.conflict_detection import check_all_conflicts, find_available_slots
-from app.services.metrics import compute_weekly_metrics
+from app.services.conflict_detection import MVP_USER_ID, check_all_conflicts, find_available_slots
+from app.services.metrics import compute_weekly_metrics, monday_of
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -84,3 +86,37 @@ def weekly_metrics(
     Counts and minutes are clipped to the target week [Mon 00:00, next Mon 00:00).
     """
     return compute_weekly_metrics(session=session, week_start=week_start)
+
+
+@router.get("/weekly-summary", response_model=ScheduleSummaryRead)
+def get_weekly_summary(
+    week_start: Optional[date] = Query(
+        default=None,
+        description=(
+            "Any date inside the target week; snapped to that week's Monday. "
+            "Defaults to the current week."
+        ),
+    ),
+    session: Session = Depends(get_session),
+):
+    """Return the stored weekly AI summary for the given week.
+
+    This is a read-only endpoint — no LLM is invoked. Returns 404 when no
+    summary has been saved for the target week.
+    """
+    anchor = week_start or date.today()
+    ws = monday_of(anchor)
+
+    summary = session.exec(
+        select(ScheduleSummary)
+        .where(ScheduleSummary.user_id == MVP_USER_ID)
+        .where(ScheduleSummary.week_start == ws)
+        .order_by(ScheduleSummary.created_at.desc())
+    ).first()
+
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No saved weekly summary for week starting {ws.isoformat()}",
+        )
+    return summary
