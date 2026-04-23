@@ -65,6 +65,46 @@ export interface BlockedTime {
   updated_at: string;
 }
 
+export interface AvailabilityWindow {
+  id: number;
+  user_id: number;
+  weekday: number;     // 0 = Monday … 6 = Sunday
+  start_time: string;  // "HH:MM:SS"
+  end_time: string;    // "HH:MM:SS"
+  active: boolean;
+  created_at: string;
+}
+
+export interface AvailabilityWindowCreate {
+  weekday: number;
+  start_time: string;  // "HH:MM" or "HH:MM:SS"
+  end_time: string;
+  active?: boolean;
+}
+
+export interface AvailabilityWindowUpdate {
+  weekday?: number;
+  start_time?: string;
+  end_time?: string;
+  active?: boolean;
+}
+
+export interface BlockedTimeCreate {
+  title: string;
+  reason?: string | null;
+  notes?: string | null;
+  start_time: string; // ISO
+  end_time: string;   // ISO
+}
+
+export interface BlockedTimeUpdate {
+  title?: string;
+  reason?: string | null;
+  notes?: string | null;
+  start_time?: string;
+  end_time?: string;
+}
+
 export interface ScheduleSummary {
   id: number;
   user_id: number;

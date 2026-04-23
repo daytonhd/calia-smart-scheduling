@@ -3,7 +3,12 @@
 
 import { API_BASE_URL } from "./config";
 import type {
+  AvailabilityWindow,
+  AvailabilityWindowCreate,
+  AvailabilityWindowUpdate,
   BlockedTime,
+  BlockedTimeCreate,
+  BlockedTimeUpdate,
   Calendar,
   CalendarCreate,
   CalendarUpdate,
@@ -132,6 +137,56 @@ export function listBlockedTimes(
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return request<BlockedTime[]>(`/blocked-times/${suffix}`);
+}
+
+export function createBlockedTime(body: BlockedTimeCreate): Promise<BlockedTime> {
+  return request<BlockedTime>("/blocked-times/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateBlockedTime(
+  id: number,
+  body: BlockedTimeUpdate
+): Promise<BlockedTime> {
+  return request<BlockedTime>(`/blocked-times/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteBlockedTime(id: number): Promise<void> {
+  return request<void>(`/blocked-times/${id}`, { method: "DELETE" });
+}
+
+// ----- Availability windows -----
+
+export function listAvailability(): Promise<AvailabilityWindow[]> {
+  return request<AvailabilityWindow[]>("/availability/");
+}
+
+export function createAvailability(
+  body: AvailabilityWindowCreate
+): Promise<AvailabilityWindow> {
+  return request<AvailabilityWindow>("/availability/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAvailability(
+  id: number,
+  body: AvailabilityWindowUpdate
+): Promise<AvailabilityWindow> {
+  return request<AvailabilityWindow>(`/availability/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAvailability(id: number): Promise<void> {
+  return request<void>(`/availability/${id}`, { method: "DELETE" });
 }
 
 export function createEvent(body: EventCreate): Promise<Event> {

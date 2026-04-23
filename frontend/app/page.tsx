@@ -11,7 +11,18 @@ export default function HomePage() {
           upcoming events
         </li>
         <li>
-          <Link href="/events">Events</Link> — manage calendars and events
+          <Link href="/schedule">Schedule</Link> — event list by date range
+          and calendar
+        </li>
+        <li>
+          <Link href="/events">Events</Link> — create/edit events
+        </li>
+        <li>
+          <Link href="/calendars">Calendars</Link> — manage calendars
+        </li>
+        <li>
+          <Link href="/availability">Availability</Link> — weekly availability
+          and blocked times
         </li>
       </ul>
     </section>
