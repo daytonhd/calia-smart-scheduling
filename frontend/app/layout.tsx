@@ -15,12 +15,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <header className="site-header">
           <h1 className="site-title">Smart Scheduling</h1>
           <nav className="site-nav" aria-label="primary">
-            <Link href="/">Home</Link>
             <Link href="/dashboard">Dashboard</Link>
             <Link href="/schedule">Schedule</Link>
-            <Link href="/events">Events</Link>
-            <Link href="/calendars">Calendars</Link>
-            <Link href="/availability">Availability</Link>
+            <Link href="/settings">Settings</Link>
           </nav>
         </header>
         <main className="site-main">{children}</main>

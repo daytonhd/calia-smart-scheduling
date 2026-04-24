@@ -42,9 +42,31 @@ function todayWindowIso(): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+// Returns the window from start of tomorrow through end of day (today + 7),
+// used for the "Upcoming events" list beyond today.
+function upcomingWindowIso(): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function formatDayTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [todayEvents, setTodayEvents] = useState<Event[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [todayBlocked, setTodayBlocked] = useState<BlockedTime[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -55,13 +77,15 @@ export default function DashboardPage() {
 
     async function load() {
       const { start, end } = todayWindowIso();
+      const { start: upStart, end: upEnd } = upcomingWindowIso();
 
       setLoading(true);
       setError(null);
       try {
-        const [m, ev, bt, ws] = await Promise.all([
+        const [m, ev, up, bt, ws] = await Promise.all([
           getWeeklyMetrics(),
           listEvents({ startTime: start, endTime: end }),
+          listEvents({ startTime: upStart, endTime: upEnd }),
           listBlockedTimes({ startTime: start, endTime: end }),
           getWeeklySummary(),
         ]);
@@ -69,6 +93,7 @@ export default function DashboardPage() {
 
         setMetrics(m);
         setTodayEvents(ev);
+        setUpcomingEvents(up);
         setTodayBlocked(bt);
         setSummary(ws);
       } catch (e) {
@@ -145,6 +170,23 @@ export default function DashboardPage() {
                   <span className="muted">
                     {" — "}
                     {formatTime(e.start_time)} → {formatTime(e.end_time)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h3 style={{ marginTop: "2rem" }}>Upcoming events</h3>
+          {upcomingEvents.length === 0 ? (
+            <p className="muted">No upcoming events in the next 7 days.</p>
+          ) : (
+            <ul className="event-list">
+              {upcomingEvents.map((e) => (
+                <li key={e.id}>
+                  <strong>{e.title}</strong>
+                  <span className="muted">
+                    {" — "}
+                    {formatDayTime(e.start_time)}
                   </span>
                 </li>
               ))}
