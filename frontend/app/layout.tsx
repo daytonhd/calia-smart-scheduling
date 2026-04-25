@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import SiteNav from "./_components/SiteNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,13 +12,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <header className="site-header">
-          <h1 className="site-title">Smart Scheduling</h1>
-          <nav className="site-nav" aria-label="primary">
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href="/schedule">Schedule</Link>
-            <Link href="/settings">Settings</Link>
-          </nav>
+        <header className="app-header">
+          <h1 className="app-brand">Smart Scheduling</h1>
+          <SiteNav />
         </header>
         <main className="site-main">{children}</main>
       </body>

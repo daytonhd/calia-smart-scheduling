@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   deleteEvent,
+  getWeeklyMetrics,
   listCalendars,
   listEvents,
 } from "@/lib/api";
-import type { Calendar, Event } from "@/lib/types";
+import type { Calendar, Event, WeeklyMetrics } from "@/lib/types";
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -25,7 +27,6 @@ function defaultRange(): { start: string; end: string } {
   return { start: toDateInput(start), end: toDateInput(end) };
 }
 
-// Interpret YYYY-MM-DD as the local midnight boundary
 function dateInputToIsoStart(v: string): string {
   const [y, m, d] = v.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0).toISOString();
@@ -33,18 +34,39 @@ function dateInputToIsoStart(v: string): string {
 
 function dateInputToIsoEndExclusive(v: string): string {
   const [y, m, d] = v.split("-").map(Number);
-  // end of selected day = start of next day
   return new Date(y, (m ?? 1) - 1, (d ?? 1) + 1, 0, 0, 0, 0).toISOString();
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+function formatTimeRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const opts: Intl.DateTimeFormatOptions = {
     hour: "numeric",
     minute: "2-digit",
-  });
+  };
+  return `${start.toLocaleTimeString(undefined, opts)} → ${end.toLocaleTimeString(
+    undefined,
+    opts
+  )}`;
+}
+
+// Build the array of day keys from start to end (inclusive)
+function buildDayKeys(startInput: string, endInput: string): string[] {
+  const [sy, sm, sd] = startInput.split("-").map(Number);
+  const [ey, em, ed] = endInput.split("-").map(Number);
+  const start = new Date(sy, (sm ?? 1) - 1, sd ?? 1);
+  const end = new Date(ey, (em ?? 1) - 1, ed ?? 1);
+  const out: string[] = [];
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(
+      `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(
+        cursor.getDate()
+      )}`
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
 }
 
 function groupByDay(events: Event[]): Map<string, Event[]> {
@@ -56,7 +78,6 @@ function groupByDay(events: Event[]): Map<string, Event[]> {
     arr.push(ev);
     map.set(key, arr);
   }
-  // sort events within each day
   for (const arr of map.values()) {
     arr.sort(
       (a, b) =>
@@ -73,8 +94,17 @@ function formatDayHeading(key: string): string {
     weekday: "long",
     month: "short",
     day: "numeric",
-    year: "numeric",
   });
+}
+
+function isToday(key: string): boolean {
+  const today = new Date();
+  return (
+    key ===
+    `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(
+      today.getDate()
+    )}`
+  );
 }
 
 export default function SchedulePage() {
@@ -87,6 +117,7 @@ export default function SchedulePage() {
 
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -118,23 +149,25 @@ export default function SchedulePage() {
     }
   }
 
-  // Initial load: calendars + events
+  // Initial load: calendars + events + metrics
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [cals, evs] = await Promise.all([
+        const [cals, evs, m] = await Promise.all([
           listCalendars(),
           listEvents({
             startTime: dateInputToIsoStart(appliedStart),
             endTime: dateInputToIsoEndExclusive(appliedEnd),
           }),
+          getWeeklyMetrics().catch(() => null),
         ]);
         if (cancelled) return;
         setCalendars(cals);
         setEvents(evs);
+        setMetrics(m);
       } catch (e) {
         if (cancelled) return;
         setError(describeError(e));
@@ -181,13 +214,23 @@ export default function SchedulePage() {
 
   const grouped = useMemo(() => groupByDay(events), [events]);
   const dayKeys = useMemo(
-    () => Array.from(grouped.keys()).sort(),
-    [grouped]
+    () => buildDayKeys(appliedStart, appliedEnd),
+    [appliedStart, appliedEnd]
   );
+
+  const selectedCalendarName = calendarFilter
+    ? calendarsById.get(Number(calendarFilter))?.name ??
+      `calendar #${calendarFilter}`
+    : null;
 
   return (
     <section>
-      <h2>Schedule</h2>
+      <header className="page-header">
+        <h2 className="page-title">Schedule</h2>
+        <p className="page-subtitle">
+          Plan commitments, availability, and protected time.
+        </p>
+      </header>
 
       {error && (
         <div className="error-box" role="alert">
@@ -195,30 +238,38 @@ export default function SchedulePage() {
         </div>
       )}
 
-      <form onSubmit={onApply} className="event-form">
-        <label>
-          Start date
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            required
-          />
-        </label>
+      {/* Toolbar */}
+      <div className="schedule-toolbar">
+        <form onSubmit={onApply} className="toolbar-form">
+          <label>
+            Start date
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
+          </label>
 
-        <label>
-          End date
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            required
-          />
-        </label>
+          <label>
+            End date
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+            />
+          </label>
 
-        <label>
-          Calendar
+          <button type="submit" disabled={loading}>
+            {loading ? "Loading…" : "Apply range"}
+          </button>
+        </form>
+
+        <div className="calendar-filter">
+          <span className="filter-label">Calendar filter</span>
           <select
+            aria-label="Filter events by calendar"
             value={calendarFilter}
             onChange={(e) => onCalendarFilterChange(e.target.value)}
           >
@@ -229,83 +280,185 @@ export default function SchedulePage() {
               </option>
             ))}
           </select>
-        </label>
-
-        {formError && (
-          <div className="error-box full" role="alert">
-            {formError}
-          </div>
-        )}
-
-        <div className="form-actions full">
-          <button type="submit" disabled={loading}>
-            {loading ? "Loading…" : "Apply range"}
-          </button>
         </div>
-      </form>
+      </div>
 
-      <p className="muted small">
-        Showing {appliedStart} → {appliedEnd}
-        {calendarFilter
-          ? ` · filtered by ${
-              calendarsById.get(Number(calendarFilter))?.name ??
-              `calendar #${calendarFilter}`
-            }`
-          : " · all calendars"}
-        {" · "}
-        {events.length} event{events.length === 1 ? "" : "s"}
-      </p>
-
-      {loading ? (
-        <p className="muted">Loading…</p>
-      ) : events.length === 0 ? (
-        <p className="muted">No events in this range.</p>
-      ) : (
-        dayKeys.map((key) => {
-          const dayEvents = grouped.get(key) ?? [];
-          return (
-            <div key={key} style={{ marginTop: "1.25rem" }}>
-              <h3 style={{ marginBottom: "0.25rem" }}>
-                {formatDayHeading(key)}
-              </h3>
-              <ul className="event-list">
-                {dayEvents.map((ev) => {
-                  const cal = calendarsById.get(ev.calendar_id);
-                  return (
-                    <li key={ev.id} className="event-row">
-                      <div>
-                        <strong>{ev.title}</strong>
-                        <span className="muted">
-                          {" — "}
-                          {formatDateTime(ev.start_time)} →{" "}
-                          {formatDateTime(ev.end_time)}
-                        </span>
-                        <div className="muted small">
-                          {cal ? cal.name : `calendar #${ev.calendar_id}`}
-                          {ev.priority ? ` · ${ev.priority}` : ""}
-                          {ev.category ? ` · ${ev.category}` : ""}
-                          {ev.location ? ` · ${ev.location}` : ""}
-                        </div>
-                      </div>
-                      <div className="row-actions">
-                        <a href={`/events`} className="muted small">
-                          Edit on Events →
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(ev.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })
+      {formError && (
+        <div className="error-box" role="alert">
+          {formError}
+        </div>
       )}
+
+      <div className="status-row">
+        <span className="pill">
+          {appliedStart} → {appliedEnd}
+        </span>
+        <span className="pill neutral">
+          {selectedCalendarName ?? "All calendars"}
+        </span>
+        <span className="muted small">
+          {events.length} event{events.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="page-grid">
+        {/* Main: schedule board */}
+        <div className="page-main">
+          {loading ? (
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>
+                Loading schedule…
+              </p>
+            </div>
+          ) : (
+            <div className="schedule-board">
+              {dayKeys.map((key) => {
+                const dayEvents = grouped.get(key) ?? [];
+                return (
+                  <div key={key} className="day-card">
+                    <div className="day-card-header">
+                      <h3>
+                        {formatDayHeading(key)}
+                        {isToday(key) && (
+                          <span
+                            className="pill"
+                            style={{ marginLeft: "0.5rem" }}
+                          >
+                            Today
+                          </span>
+                        )}
+                      </h3>
+                      <span className="day-meta">
+                        {dayEvents.length === 0
+                          ? "Open"
+                          : `${dayEvents.length} event${
+                              dayEvents.length === 1 ? "" : "s"
+                            }`}
+                      </span>
+                    </div>
+
+                    {dayEvents.length === 0 ? (
+                      <div className="day-empty">No events scheduled.</div>
+                    ) : (
+                      <ul className="day-events">
+                        {dayEvents.map((ev) => {
+                          const cal = calendarsById.get(ev.calendar_id);
+                          return (
+                            <li key={ev.id} className="day-event">
+                              <div className="day-event-body">
+                                <div className="day-event-title">
+                                  {ev.title}
+                                </div>
+                                <div className="day-event-meta">
+                                  {formatTimeRange(ev.start_time, ev.end_time)}
+                                </div>
+                                <div className="day-event-tags">
+                                  {cal ? cal.name : `calendar #${ev.calendar_id}`}
+                                  {ev.priority ? ` · ${ev.priority}` : ""}
+                                  {ev.category ? ` · ${ev.category}` : ""}
+                                  {ev.location ? ` · ${ev.location}` : ""}
+                                </div>
+                              </div>
+                              <div className="day-event-actions">
+                                <Link href="/events" className="ghost-link">
+                                  <button type="button" className="ghost">
+                                    Edit
+                                  </button>
+                                </Link>
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  onClick={() => onDelete(ev.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right sidebar */}
+        <aside className="page-side">
+          {/* Availability entry point */}
+          <div className="cta-card">
+            <h3>Availability</h3>
+            <p>Manage availability windows and blocked times.</p>
+            <Link href="/availability" className="cta-link">
+              Manage availability
+            </Link>
+          </div>
+
+          {/* Active filter / status summary */}
+          <div className="sidebar-card">
+            <div className="sidebar-card-title">
+              <span>Current view</span>
+            </div>
+            <div className="metric-rows">
+              <div className="metric-row">
+                <span className="metric-label">Range</span>
+                <span className="metric-value small">
+                  {appliedStart} → {appliedEnd}
+                </span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Calendar</span>
+                <span className="metric-value">
+                  {selectedCalendarName ?? "All calendars"}
+                </span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Events</span>
+                <span className="metric-value">{events.length}</span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Days</span>
+                <span className="metric-value">{dayKeys.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Weekly metrics */}
+          {metrics && (
+            <div className="sidebar-card">
+              <div className="sidebar-card-title">
+                <span>Weekly Metrics</span>
+              </div>
+              <div className="metric-rows">
+                <div className="metric-row">
+                  <span className="metric-label">Events</span>
+                  <span className="metric-value">{metrics.total_events}</span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Scheduled minutes</span>
+                  <span className="metric-value">
+                    {metrics.total_scheduled_minutes}
+                  </span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Blocked minutes</span>
+                  <span className="metric-value">
+                    {metrics.total_blocked_minutes}
+                  </span>
+                </div>
+                <div className="metric-row">
+                  <span className="metric-label">Busiest day</span>
+                  <span className="metric-value">
+                    {metrics.busiest_day ?? "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
     </section>
   );
 }
