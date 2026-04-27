@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -25,11 +26,15 @@ function toDateInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Default range: today through +7 days
+// Default range: current week starting Monday, 7 days.
 function defaultRange(): { start: string; end: string } {
-  const start = new Date();
-  const end = new Date();
-  end.setDate(start.getDate() + 7);
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun..6=Sat
+  // Treat Monday as week start.
+  const offsetToMonday = (dow + 6) % 7;
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offsetToMonday);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
   return { start: toDateInput(start), end: toDateInput(end) };
 }
 
@@ -45,14 +50,11 @@ function dateInputToNaiveEndExclusive(v: string): string {
   return `${toDateInput(next)}T00:00:00`;
 }
 
-// datetime-local inputs return "YYYY-MM-DDTHH:MM" — already naive local time.
-// Ensure trailing seconds for backend ISO-8601 parsing.
 function fromLocalInputNaive(v: string): string {
   return v.length === 16 ? `${v}:00` : v;
 }
 
 function toLocalInput(iso: string): string {
-  // Convert backend ISO (naive) to "YYYY-MM-DDTHH:mm" for <input type="datetime-local">.
   const d = new Date(iso);
   return (
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
@@ -60,20 +62,60 @@ function toLocalInput(iso: string): string {
   );
 }
 
-function formatTimeRange(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const opts: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  return `${start.toLocaleTimeString(undefined, opts)} → ${end.toLocaleTimeString(
-    undefined,
-    opts
-  )}`;
+function shiftDateInput(input: string, days: number): string {
+  const [y, m, d] = input.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) + days);
+  return toDateInput(dt);
 }
 
-// Build the array of day keys from start to end (inclusive)
+function rangeDays(startInput: string, endInput: string): number {
+  const [sy, sm, sd] = startInput.split("-").map(Number);
+  const [ey, em, ed] = endInput.split("-").map(Number);
+  const start = new Date(sy, (sm ?? 1) - 1, sd ?? 1);
+  const end = new Date(ey, (em ?? 1) - 1, ed ?? 1);
+  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function formatRangeLabel(startInput: string, endInput: string): string {
+  const [sy, sm, sd] = startInput.split("-").map(Number);
+  const [ey, em, ed] = endInput.split("-").map(Number);
+  const start = new Date(sy, (sm ?? 1) - 1, sd ?? 1);
+  const end = new Date(ey, (em ?? 1) - 1, ed ?? 1);
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startFmt = start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const endFmt = end.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${startFmt} – ${endFmt}`;
+}
+
+function formatTimeShort(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatTimeRange(startIso: string, endIso: string): string {
+  return `${formatTimeShort(startIso)} → ${formatTimeShort(endIso)}`;
+}
+
+function formatDayTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function buildDayKeys(startInput: string, endInput: string): string[] {
   const [sy, sm, sd] = startInput.split("-").map(Number);
   const [ey, em, ed] = endInput.split("-").map(Number);
@@ -110,16 +152,6 @@ function groupByDay(events: Event[]): Map<string, Event[]> {
   return map;
 }
 
-function formatDayHeading(key: string): string {
-  const [y, m, d] = key.split("-").map(Number);
-  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function isToday(key: string): boolean {
   const today = new Date();
   return (
@@ -128,6 +160,21 @@ function isToday(key: string): boolean {
       today.getDate()
     )}`
   );
+}
+
+function isWeekend(key: string): boolean {
+  const [y, m, d] = key.split("-").map(Number);
+  const dow = new Date(y, (m ?? 1) - 1, d ?? 1).getDay();
+  return dow === 0 || dow === 6;
+}
+
+function dayHeaderParts(key: string): { weekday: string; daynum: string } {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return {
+    weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+    daynum: date.toLocaleDateString(undefined, { day: "numeric" }),
+  };
 }
 
 interface FormState {
@@ -164,8 +211,6 @@ interface ConflictDetail {
 
 export default function SchedulePage() {
   const initial = defaultRange();
-  const [startDate, setStartDate] = useState<string>(initial.start);
-  const [endDate, setEndDate] = useState<string>(initial.end);
   const [appliedStart, setAppliedStart] = useState<string>(initial.start);
   const [appliedEnd, setAppliedEnd] = useState<string>(initial.end);
   const [calendarFilter, setCalendarFilter] = useState<string>("");
@@ -175,7 +220,6 @@ export default function SchedulePage() {
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [rangeError, setRangeError] = useState<string | null>(null);
 
   // Inline event create/edit panel state.
   const [formOpen, setFormOpen] = useState<boolean>(false);
@@ -244,20 +288,41 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function onApply(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setRangeError(null);
-    if (!startDate || !endDate) {
-      setRangeError("Start and end dates are required.");
-      return;
+  function applyRange(start: string, end: string) {
+    setAppliedStart(start);
+    setAppliedEnd(end);
+    loadEvents(start, end, calendarFilter);
+  }
+
+  function shiftWeek(days: number) {
+    const start = shiftDateInput(appliedStart, days);
+    const end = shiftDateInput(appliedEnd, days);
+    applyRange(start, end);
+  }
+
+  function goToday() {
+    const r = defaultRange();
+    applyRange(r.start, r.end);
+  }
+
+  function onPickStart(v: string) {
+    if (!v) return;
+    if (v > appliedEnd) {
+      // Snap end to keep range valid (preserve 7-day window).
+      const newEnd = shiftDateInput(v, 6);
+      applyRange(v, newEnd);
+    } else {
+      applyRange(v, appliedEnd);
     }
-    if (startDate > endDate) {
-      setRangeError("Start date must be before or equal to end date.");
-      return;
+  }
+
+  function onPickEnd(v: string) {
+    if (!v) return;
+    if (v < appliedStart) {
+      applyRange(v, v);
+    } else {
+      applyRange(appliedStart, v);
     }
-    setAppliedStart(startDate);
-    setAppliedEnd(endDate);
-    loadEvents(startDate, endDate, calendarFilter);
   }
 
   function onCalendarFilterChange(v: string) {
@@ -372,10 +437,18 @@ export default function SchedulePage() {
     [appliedStart, appliedEnd]
   );
 
-  const selectedCalendarName = calendarFilter
-    ? calendarsById.get(Number(calendarFilter))?.name ??
-      `calendar #${calendarFilter}`
-    : null;
+  const upcoming = useMemo(() => {
+    const now = Date.now();
+    return [...events]
+      .filter((e) => new Date(e.start_time).getTime() >= now)
+      .sort(
+        (a, b) =>
+          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
+      .slice(0, 5);
+  }, [events]);
+
+  const totalDays = rangeDays(appliedStart, appliedEnd);
 
   return (
     <section>
@@ -392,38 +465,56 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="schedule-toolbar">
-        <form onSubmit={onApply} className="toolbar-form">
-          <label>
-            Start date
+      {/* Compact toolbar */}
+      <div className="toolbar-bar">
+        <div className="toolbar-left">
+          <div className="range-nav" role="group" aria-label="Week navigation">
+            <button
+              type="button"
+              onClick={() => shiftWeek(-7)}
+              aria-label="Previous week"
+              disabled={loading}
+            >
+              ‹
+            </button>
+            <button type="button" onClick={goToday} disabled={loading}>
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => shiftWeek(7)}
+              aria-label="Next week"
+              disabled={loading}
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="range-display">
+            {formatRangeLabel(appliedStart, appliedEnd)}
+          </div>
+
+          <div className="range-pickers">
             <input
               type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              required
+              value={appliedStart}
+              onChange={(e) => onPickStart(e.target.value)}
+              aria-label="Range start"
             />
-          </label>
-
-          <label>
-            End date
+            <span className="range-sep">→</span>
             <input
               type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              required
+              value={appliedEnd}
+              onChange={(e) => onPickEnd(e.target.value)}
+              aria-label="Range end"
             />
-          </label>
+          </div>
+        </div>
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Loading…" : "Apply range"}
-          </button>
-        </form>
-
-        <div className="calendar-filter">
-          <span className="filter-label">Calendar filter</span>
+        <div className="toolbar-right">
           <select
-            aria-label="Filter events by calendar"
+            className="toolbar-select"
+            aria-label="Filter by calendar"
             value={calendarFilter}
             onChange={(e) => onCalendarFilterChange(e.target.value)}
           >
@@ -435,24 +526,20 @@ export default function SchedulePage() {
             ))}
           </select>
 
-          {!formOpen && (
-            <button
-              type="button"
-              className="primary"
-              onClick={openCreateForm}
-              style={{ marginLeft: "0.5rem" }}
-            >
-              + Add Event
-            </button>
-          )}
+          <button
+            type="button"
+            className="primary"
+            onClick={openCreateForm}
+            disabled={formOpen && editingId == null}
+          >
+            + Add Event
+          </button>
+
+          <Link href="/availability" className="button-link">
+            + Add Blocked Time
+          </Link>
         </div>
       </div>
-
-      {rangeError && (
-        <div className="error-box" role="alert">
-          {rangeError}
-        </div>
-      )}
 
       {/* Inline event create/edit panel */}
       {formOpen && (
@@ -622,20 +709,8 @@ export default function SchedulePage() {
         </div>
       )}
 
-      <div className="status-row">
-        <span className="pill">
-          {appliedStart} → {appliedEnd}
-        </span>
-        <span className="pill neutral">
-          {selectedCalendarName ?? "All calendars"}
-        </span>
-        <span className="muted small">
-          {events.length} event{events.length === 1 ? "" : "s"}
-        </span>
-      </div>
-
       <div className="page-grid">
-        {/* Main: schedule board */}
+        {/* Main: 7-column week board */}
         <div className="page-main">
           {loading ? (
             <div className="card">
@@ -644,109 +719,139 @@ export default function SchedulePage() {
               </p>
             </div>
           ) : (
-            <div className="schedule-board">
-              {dayKeys.map((key) => {
-                const dayEvents = grouped.get(key) ?? [];
-                return (
-                  <div key={key} className="day-card">
-                    <div className="day-card-header">
-                      <h3>
-                        {formatDayHeading(key)}
-                        {isToday(key) && (
-                          <span
-                            className="pill"
-                            style={{ marginLeft: "0.5rem" }}
-                          >
-                            Today
-                          </span>
-                        )}
-                      </h3>
-                      <span className="day-meta">
-                        {dayEvents.length === 0
-                          ? "Open"
-                          : `${dayEvents.length} event${
-                              dayEvents.length === 1 ? "" : "s"
-                            }`}
-                      </span>
-                    </div>
+            <div className="week-grid-wrap">
+              <div
+                className="week-grid"
+                style={{
+                  gridTemplateColumns: `repeat(${dayKeys.length}, minmax(140px, 1fr))`,
+                }}
+              >
+                {dayKeys.map((key) => {
+                  const dayEvents = grouped.get(key) ?? [];
+                  const { weekday, daynum } = dayHeaderParts(key);
+                  const today = isToday(key);
+                  const weekend = isWeekend(key);
+                  const classes = ["week-col"];
+                  if (today) classes.push("is-today");
+                  if (weekend) classes.push("is-weekend");
+                  return (
+                    <div key={key} className={classes.join(" ")}>
+                      <div className="week-col-header">
+                        <div className="week-col-header-left">
+                          <span className="week-col-day">{weekday}</span>
+                          <span className="week-col-num">{daynum}</span>
+                        </div>
+                        <span className="week-col-count">
+                          {dayEvents.length === 0
+                            ? "—"
+                            : `${dayEvents.length}`}
+                        </span>
+                      </div>
 
-                    {dayEvents.length === 0 ? (
-                      <div className="day-empty">No events scheduled.</div>
-                    ) : (
-                      <ul className="day-events">
-                        {dayEvents.map((ev) => {
-                          const cal = calendarsById.get(ev.calendar_id);
-                          return (
-                            <li key={ev.id} className="day-event">
-                              <div className="day-event-body">
-                                <div className="day-event-title">
-                                  {ev.title}
-                                </div>
-                                <div className="day-event-meta">
+                      {dayEvents.length === 0 ? (
+                        <div className="week-col-empty">No events</div>
+                      ) : (
+                        <ul className="week-col-events">
+                          {dayEvents.map((ev) => {
+                            const cal = calendarsById.get(ev.calendar_id);
+                            return (
+                              <li key={ev.id} className="week-event">
+                                <div className="week-event-time">
                                   {formatTimeRange(ev.start_time, ev.end_time)}
                                 </div>
-                                <div className="day-event-tags">
-                                  {cal ? cal.name : `calendar #${ev.calendar_id}`}
+                                <div className="week-event-title">
+                                  {ev.title}
+                                </div>
+                                <div className="week-event-meta">
+                                  {cal ? cal.name : `cal #${ev.calendar_id}`}
                                   {ev.priority ? ` · ${ev.priority}` : ""}
-                                  {ev.category ? ` · ${ev.category}` : ""}
                                   {ev.location ? ` · ${ev.location}` : ""}
                                 </div>
-                              </div>
-                              <div className="day-event-actions">
-                                <button
-                                  type="button"
-                                  className="ghost"
-                                  onClick={() => startEdit(ev)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ghost"
-                                  onClick={() => onDelete(ev.id)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })}
+                                <div className="week-event-actions">
+                                  <button
+                                    type="button"
+                                    className="ghost"
+                                    onClick={() => startEdit(ev)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ghost"
+                                    onClick={() => onDelete(ev.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
 
         {/* Right sidebar */}
         <aside className="page-side">
-          {/* Active filter / status summary */}
+          {/* Upcoming */}
+          <div className="sidebar-card">
+            <div className="sidebar-card-title">
+              <span>Upcoming</span>
+              <span className="muted small">
+                {upcoming.length} of {events.length}
+              </span>
+            </div>
+            {upcoming.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-state-strong">Nothing upcoming</span>
+                Nothing scheduled in this range.
+              </div>
+            ) : (
+              <ul className="list-rows">
+                {upcoming.map((e) => (
+                  <li key={e.id}>
+                    <div className="row-icon" aria-hidden>
+                      ▣
+                    </div>
+                    <div className="row-body">
+                      <div className="row-title">{e.title}</div>
+                      <div className="row-meta">
+                        {formatDayTime(e.start_time)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Current view summary */}
           <div className="sidebar-card">
             <div className="sidebar-card-title">
               <span>Current view</span>
             </div>
             <div className="metric-rows">
               <div className="metric-row">
-                <span className="metric-label">Range</span>
-                <span className="metric-value small">
-                  {appliedStart} → {appliedEnd}
-                </span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Calendar</span>
-                <span className="metric-value">
-                  {selectedCalendarName ?? "All calendars"}
-                </span>
+                <span className="metric-label">Days</span>
+                <span className="metric-value">{totalDays}</span>
               </div>
               <div className="metric-row">
                 <span className="metric-label">Events</span>
                 <span className="metric-value">{events.length}</span>
               </div>
               <div className="metric-row">
-                <span className="metric-label">Days</span>
-                <span className="metric-value">{dayKeys.length}</span>
+                <span className="metric-label">Calendar</span>
+                <span className="metric-value">
+                  {calendarFilter
+                    ? calendarsById.get(Number(calendarFilter))?.name ??
+                      `#${calendarFilter}`
+                    : "All"}
+                </span>
               </div>
             </div>
           </div>
