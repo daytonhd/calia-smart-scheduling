@@ -1,10 +1,17 @@
-"""Schemas for schedule-related endpoints."""
+"""Schemas for schedule-related endpoints.
+
+All scheduling datetime fields follow the MVP time contract: naive datetimes
+representing local app time. Timezone-aware values are rejected at the API
+boundary by ensure_naive_datetime so downstream comparisons are consistent.
+"""
 
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlmodel import SQLModel
+
+from app.services.time_contract import ensure_naive_datetime
 
 
 class ConflictCheckRequest(SQLModel):
@@ -15,6 +22,11 @@ class ConflictCheckRequest(SQLModel):
     end_time: datetime
     exclude_event_id: Optional[int] = None
 
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _naive_only(cls, v: datetime) -> datetime:
+        return ensure_naive_datetime(v, "start_time/end_time")
+
     @model_validator(mode="after")
     def validate_time_range(self):
         if self.start_time >= self.end_time:
@@ -23,10 +35,27 @@ class ConflictCheckRequest(SQLModel):
 
 
 class ConflictDetail(SQLModel):
-    """A single detected conflict."""
+    """A single detected conflict.
+
+    reason_code is a stable machine identifier (EVENT_OVERLAP,
+    BLOCKED_TIME_OVERLAP, OUTSIDE_AVAILABILITY, INVALID_TIME_RANGE).
+    message is a deterministic backend-formatted human-readable string.
+    conflict_type is the high-level category ("event", "blocked_time",
+    "availability", "input").
+    start_time / end_time identify the offending interval when applicable
+    (the related event/blocked-time interval, or the proposed interval for
+    availability/input issues).
+    related_event_id / related_blocked_time_id link the conflict back to a
+    specific stored row when applicable.
+    """
 
     reason_code: str
     message: str
+    conflict_type: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    related_event_id: Optional[int] = None
+    related_blocked_time_id: Optional[int] = None
 
 
 class ConflictCheckResponse(SQLModel):
@@ -54,10 +83,20 @@ class SuggestSlotsRequest(SQLModel):
 
 
 class SlotSuggestion(SQLModel):
-    """A single available time slot."""
+    """A single available time slot.
+
+    reason_code is a stable identifier (EARLIEST_VALID_SLOT,
+    FITS_AVAILABILITY, AVOIDS_CONFLICTS). explanation is a deterministic
+    human-readable string describing why this slot was selected.
+    """
 
     start_time: datetime
     end_time: datetime
+    reason_code: str = "EARLIEST_VALID_SLOT"
+    explanation: str = (
+        "Selected because it fits inside an active availability window "
+        "and avoids existing events and blocked times."
+    )
 
 
 class SuggestSlotsResponse(SQLModel):
@@ -87,3 +126,39 @@ class ScheduleSummaryRead(SQLModel):
     week_start: date
     generated_text: str
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Triage schemas (GET /schedule/triage)
+# ---------------------------------------------------------------------------
+
+
+class TriageWarning(SQLModel):
+    """A single triage warning attached to a day or week."""
+
+    reason_code: str
+    message: str
+
+
+class TriageDay(SQLModel):
+    """Per-day triage summary."""
+
+    date: date
+    scheduled_minutes: int
+    blocked_minutes: int
+    total_busy_minutes: int
+    free_minutes: int
+    longest_free_window_minutes: int
+    is_overloaded: bool
+    is_fragmented: bool
+    has_weak_buffer: bool
+    warnings: List[TriageWarning]
+
+
+class TriageResponse(SQLModel):
+    """Response for GET /schedule/triage."""
+
+    week_start: date
+    week_end: date
+    days: List[TriageDay]
+    week_warnings: List[TriageWarning]

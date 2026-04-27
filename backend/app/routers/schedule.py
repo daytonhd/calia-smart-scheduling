@@ -14,10 +14,12 @@ from app.schemas.schedule import (
     ScheduleSummaryRead,
     SuggestSlotsRequest,
     SuggestSlotsResponse,
+    TriageResponse,
     WeeklyMetricsResponse,
 )
 from app.services.conflict_detection import MVP_USER_ID, check_all_conflicts, find_available_slots
 from app.services.metrics import compute_weekly_metrics, monday_of
+from app.services.triage import compute_weekly_triage
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -86,6 +88,28 @@ def weekly_metrics(
     Counts and minutes are clipped to the target week [Mon 00:00, next Mon 00:00).
     """
     return compute_weekly_metrics(session=session, week_start=week_start)
+
+
+@router.get("/triage", response_model=TriageResponse)
+def weekly_triage(
+    week_start: Optional[date] = Query(
+        default=None,
+        description=(
+            "Any date inside the target week; snapped to that week's Monday. "
+            "Defaults to the current week."
+        ),
+    ),
+    session: Session = Depends(get_session),
+):
+    """Return per-day triage diagnostics for a 7-day window starting Monday.
+
+    Detects overloaded days, fragmented days, weak buffer capacity, and the
+    longest free window per day. Uses existing events, blocked times, and
+    availability windows — no LLM, no new tables.
+    """
+    anchor = week_start or date.today()
+    ws = monday_of(anchor)
+    return compute_weekly_triage(session=session, week_start=ws)
 
 
 @router.get("/weekly-summary", response_model=ScheduleSummaryRead)

@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models.blocked_time import BlockedTime
 from app.schemas.blocked_time import BlockedTimeCreate, BlockedTimeRead, BlockedTimeUpdate
+from app.services.time_contract import ensure_naive_datetime
 
 # Single MVP user — auth deferred
 MVP_USER_ID = 1
@@ -31,6 +32,12 @@ def list_blocked_times(
     end_time: Optional[datetime] = None,
     session: Session = Depends(get_session),
 ):
+    try:
+        start_time = ensure_naive_datetime(start_time, "start_time")
+        end_time = ensure_naive_datetime(end_time, "end_time")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     if start_time is not None and end_time is not None and start_time >= end_time:
         raise HTTPException(status_code=400, detail="start_time must be before end_time")
 

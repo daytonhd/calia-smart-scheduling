@@ -3,8 +3,10 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlmodel import SQLModel
+
+from app.services.time_contract import ensure_naive_datetime
 
 
 class EventCreate(SQLModel):
@@ -18,6 +20,11 @@ class EventCreate(SQLModel):
     location: Optional[str] = None
     start_time: datetime
     end_time: datetime
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _naive_only(cls, v: datetime) -> datetime:
+        return ensure_naive_datetime(v, "start_time/end_time")
 
     @model_validator(mode="after")
     def validate_time_range(self):
@@ -37,6 +44,11 @@ class EventUpdate(SQLModel):
     location: Optional[str] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _naive_only(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return ensure_naive_datetime(v, "start_time/end_time")
 
     @model_validator(mode="after")
     def validate_time_range(self):

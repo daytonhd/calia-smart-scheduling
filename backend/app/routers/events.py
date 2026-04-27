@@ -11,6 +11,7 @@ from app.models.calendar import Calendar
 from app.models.event import Event
 from app.schemas.event import EventCreate, EventRead, EventUpdate
 from app.services.conflict_detection import check_all_conflicts
+from app.services.time_contract import ensure_naive_datetime
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -49,6 +50,12 @@ def list_events(
     end_time: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
 ):
+    try:
+        start_time = ensure_naive_datetime(start_time, "start_time")
+        end_time = ensure_naive_datetime(end_time, "end_time")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     if start_time is not None and end_time is not None and start_time >= end_time:
         raise HTTPException(status_code=400, detail="start_time must be before end_time")
 

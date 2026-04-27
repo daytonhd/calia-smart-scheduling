@@ -7,6 +7,10 @@ Three conflict types are checked:
                              availability window for that weekday
 
 Touching boundaries (end_a == start_b) are NOT considered overlap.
+
+Time contract: all datetime arguments must be naive (see
+app.services.time_contract). Schemas reject tz-aware inputs at the API
+boundary, so service-level code can safely compare naive values directly.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -30,6 +34,25 @@ class FreeWindow(NamedTuple):
 # Single-user MVP — all blocked times and availability windows belong to this user.
 MVP_USER_ID = 1
 
+# Weekday names for human-readable messages.
+_WEEKDAY_NAMES = [
+    "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday",
+]
+
+# Slot suggestion explanation strings — kept here so the service is the single
+# source of truth for deterministic backend-formatted text.
+_SLOT_REASON_CODE = "EARLIEST_VALID_SLOT"
+_SLOT_EXPLANATION = (
+    "Selected because it fits inside an active availability window "
+    "and avoids existing events and blocked times."
+)
+
+
+def _format_clock(dt: datetime) -> str:
+    """Format a datetime as '1:00 PM' (no leading zero on hour)."""
+    return dt.strftime("%I:%M %p").lstrip("0")
+
 
 def _check_event_overlap(
     start_time: datetime,
@@ -37,7 +60,7 @@ def _check_event_overlap(
     session: Session,
     exclude_event_id: Optional[int],
 ) -> List[ConflictDetail]:
-    """Return conflicts for each existing event that overlaps the proposed interval.
+    """Return one ConflictDetail per existing event that overlaps the proposed interval.
 
     Overlap condition (touching boundaries excluded):
         existing.start_time < end_time AND existing.end_time > start_time
@@ -51,16 +74,20 @@ def _check_event_overlap(
 
     overlapping = session.exec(query).all()
 
-    return [
-        ConflictDetail(
+    details: List[ConflictDetail] = []
+    for e in overlapping:
+        details.append(ConflictDetail(
             reason_code="EVENT_OVERLAP",
+            conflict_type="event",
             message=(
-                f"Conflicts with existing event '{e.title}' (id={e.id}) "
-                f"from {e.start_time.isoformat()} to {e.end_time.isoformat()}"
+                f"This time overlaps an existing event from "
+                f"{_format_clock(e.start_time)} to {_format_clock(e.end_time)}."
             ),
-        )
-        for e in overlapping
-    ]
+            start_time=e.start_time,
+            end_time=e.end_time,
+            related_event_id=e.id,
+        ))
+    return details
 
 
 def _check_blocked_time_overlap(
@@ -68,7 +95,7 @@ def _check_blocked_time_overlap(
     end_time: datetime,
     session: Session,
 ) -> List[ConflictDetail]:
-    """Return conflicts for each blocked time entry that overlaps the proposed interval.
+    """Return one ConflictDetail per blocked-time row that overlaps the proposed interval.
 
     Overlap condition (touching boundaries excluded):
         blocked.start_time < end_time AND blocked.end_time > start_time
@@ -80,16 +107,20 @@ def _check_blocked_time_overlap(
     )
     overlapping = session.exec(query).all()
 
-    return [
-        ConflictDetail(
+    details: List[ConflictDetail] = []
+    for bt in overlapping:
+        details.append(ConflictDetail(
             reason_code="BLOCKED_TIME_OVERLAP",
+            conflict_type="blocked_time",
             message=(
-                f"Conflicts with blocked time '{bt.title}' (id={bt.id}) "
-                f"from {bt.start_time.isoformat()} to {bt.end_time.isoformat()}"
+                f"This time overlaps blocked time from "
+                f"{_format_clock(bt.start_time)} to {_format_clock(bt.end_time)}."
             ),
-        )
-        for bt in overlapping
-    ]
+            start_time=bt.start_time,
+            end_time=bt.end_time,
+            related_blocked_time_id=bt.id,
+        ))
+    return details
 
 
 def _check_availability(
@@ -100,15 +131,16 @@ def _check_availability(
     """Return a conflict if the proposed time is not fully contained within any
     active availability window for the event's weekday.
 
-    Availability windows store wall-clock time (no timezone). The comparison uses
-    .time() on the event datetimes, which drops timezone info. For MVP, datetimes
-    are expected to be in a consistent timezone context (e.g., all naive or all UTC).
+    Availability windows store wall-clock time (no timezone). Both event and
+    window comparisons happen in the same naive local-app-time frame per the
+    MVP time contract.
 
     Weekday convention: 0=Monday, 6=Sunday (matches Python's datetime.weekday()).
     """
     weekday = start_time.weekday()
-    event_start = start_time.time().replace(tzinfo=None)
-    event_end = end_time.time().replace(tzinfo=None)
+    weekday_name = _WEEKDAY_NAMES[weekday]
+    event_start = start_time.time()
+    event_end = end_time.time()
 
     windows = session.exec(
         select(AvailabilityWindow).where(
@@ -122,10 +154,13 @@ def _check_availability(
         return [
             ConflictDetail(
                 reason_code="OUTSIDE_AVAILABILITY",
+                conflict_type="availability",
                 message=(
-                    f"No active availability window exists for weekday {weekday} "
-                    f"(0=Monday, 6=Sunday)"
+                    f"This time is outside your active availability window "
+                    f"for {weekday_name}."
                 ),
+                start_time=start_time,
+                end_time=end_time,
             )
         ]
 
@@ -136,11 +171,13 @@ def _check_availability(
     return [
         ConflictDetail(
             reason_code="OUTSIDE_AVAILABILITY",
+            conflict_type="availability",
             message=(
-                f"Proposed event ({event_start.isoformat()}–{event_end.isoformat()}) "
-                f"is not fully contained within any active availability window "
-                f"for weekday {weekday} (0=Monday, 6=Sunday)"
+                f"This time is outside your active availability window "
+                f"for {weekday_name}."
             ),
+            start_time=start_time,
+            end_time=end_time,
         )
     ]
 
@@ -154,8 +191,8 @@ def check_all_conflicts(
     """Run all three conflict checks and return every detected conflict.
 
     Args:
-        start_time:        Proposed event start.
-        end_time:          Proposed event end.
+        start_time:        Proposed event start (naive datetime).
+        end_time:          Proposed event end (naive datetime).
         session:           Active database session.
         exclude_event_id:  Event id to skip during overlap check (used on update
                            so the event does not conflict with itself).
@@ -220,9 +257,9 @@ def find_free_windows(
       3. For each availability window, subtract the union of occupied intervals
          and emit the remaining free sub-intervals.
 
-    This is a reusable lower-level helper — slot-fitting logic can layer on top
-    by walking the returned windows. It does not enforce any slot duration or
-    grid alignment; callers decide how to consume free intervals.
+    This is a reusable lower-level helper — slot-fitting and triage logic layer
+    on top by walking the returned windows. It does not enforce any slot
+    duration or grid alignment; callers decide how to consume free intervals.
 
     Returns:
         Free windows ordered earliest-first. Empty list if no availability
@@ -291,6 +328,10 @@ def find_available_slots(
     through active availability windows for that weekday in 30-minute increments.
     A candidate slot is valid when check_all_conflicts returns empty.
 
+    Each returned slot includes a deterministic reason_code (EARLIEST_VALID_SLOT)
+    and an explanation string. Ranking is simple: earliest valid slots first.
+    Rejected candidates are NOT returned in MVP.
+
     Args:
         duration_minutes:  Required slot length in minutes (>= 1).
         start_date:        First day to scan (inclusive).
@@ -332,6 +373,8 @@ def find_available_slots(
                     results.append(SlotSuggestion(
                         start_time=candidate_start,
                         end_time=candidate_end,
+                        reason_code=_SLOT_REASON_CODE,
+                        explanation=_SLOT_EXPLANATION,
                     ))
                     if len(results) >= max_results:
                         break
