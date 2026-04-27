@@ -162,3 +162,50 @@ class TriageResponse(SQLModel):
     week_end: date
     days: List[TriageDay]
     week_warnings: List[TriageWarning]
+
+
+# ---------------------------------------------------------------------------
+# Adaptive rescheduling schemas (POST /schedule/reschedule-options)
+# ---------------------------------------------------------------------------
+
+
+class RescheduleOptionsRequest(SQLModel):
+    """Request body for POST /schedule/reschedule-options."""
+
+    event_id: int
+    search_start: datetime
+    search_end: datetime
+    max_results: int = 5
+
+    @field_validator("search_start", "search_end")
+    @classmethod
+    def _naive_only(cls, v: datetime) -> datetime:
+        return ensure_naive_datetime(v, "search_start/search_end")
+
+    @model_validator(mode="after")
+    def validate_fields(self):
+        if self.search_start >= self.search_end:
+            raise ValueError("search_start must be before search_end")
+        if self.max_results < 1:
+            raise ValueError("max_results must be at least 1")
+        return self
+
+
+class RescheduleOption(SQLModel):
+    """A single ranked replacement option."""
+
+    rank: int
+    start_time: datetime
+    end_time: datetime
+    reason_code: str
+    explanation: str
+    minutes_from_original_start: int
+
+
+class RescheduleOptionsResponse(SQLModel):
+    """Response for POST /schedule/reschedule-options."""
+
+    event_id: int
+    event_title: str
+    duration_minutes: int
+    options: List[RescheduleOption]

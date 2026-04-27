@@ -47,13 +47,22 @@ function formatDayTime(iso: string): string {
   });
 }
 
-// Returns [startOfTodayISO, startOfTomorrowISO] as ISO strings in local time.
+// Naive-local ISO: backend rejects tz-aware datetimes per the MVP time contract.
+function naiveLocalIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+// Returns [startOfToday, startOfTomorrow] as naive local ISO strings.
 function todayWindowIso(): { start: string; end: string } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  return { start: start.toISOString(), end: end.toISOString() };
+  return { start: naiveLocalIso(start), end: naiveLocalIso(end) };
 }
 
 // Returns the window from start of tomorrow through end of day (today + 7).
@@ -62,7 +71,7 @@ function upcomingWindowIso(): { start: string; end: string } {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const end = new Date(start);
   end.setDate(end.getDate() + 7);
-  return { start: start.toISOString(), end: end.toISOString() };
+  return { start: naiveLocalIso(start), end: naiveLocalIso(end) };
 }
 
 function todayLabel(): string {

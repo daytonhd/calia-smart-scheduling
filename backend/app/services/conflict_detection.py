@@ -321,6 +321,7 @@ def find_available_slots(
     end_date: date,
     max_results: int,
     session: Session,
+    exclude_event_id: Optional[int] = None,
 ) -> List[SlotSuggestion]:
     """Return up to max_results conflict-free slots of the requested duration.
 
@@ -369,7 +370,12 @@ def find_available_slots(
             while candidate_start + slot_duration <= window_end:
                 candidate_end = candidate_start + slot_duration
 
-                if not check_all_conflicts(candidate_start, candidate_end, session):
+                if not check_all_conflicts(
+                    candidate_start,
+                    candidate_end,
+                    session,
+                    exclude_event_id=exclude_event_id,
+                ):
                     results.append(SlotSuggestion(
                         start_time=candidate_start,
                         end_time=candidate_end,

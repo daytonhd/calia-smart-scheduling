@@ -79,7 +79,8 @@ function toLocalInput(iso: string): string {
 }
 
 function fromLocalInput(v: string): string {
-  return new Date(v).toISOString();
+  // Backend MVP time contract rejects tz-aware datetimes — pass through naively.
+  return v.length === 16 ? `${v}:00` : v;
 }
 
 function formatDateTime(iso: string): string {

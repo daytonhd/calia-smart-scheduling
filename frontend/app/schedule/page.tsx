@@ -1,15 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  createEvent,
   deleteEvent,
   getWeeklyMetrics,
   listCalendars,
   listEvents,
+  updateEvent,
 } from "@/lib/api";
-import type { Calendar, Event, WeeklyMetrics } from "@/lib/types";
+import type {
+  Calendar,
+  Event,
+  EventCreate,
+  WeeklyMetrics,
+} from "@/lib/types";
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -27,14 +33,31 @@ function defaultRange(): { start: string; end: string } {
   return { start: toDateInput(start), end: toDateInput(end) };
 }
 
-function dateInputToIsoStart(v: string): string {
-  const [y, m, d] = v.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0).toISOString();
+// MVP time contract: backend rejects timezone-aware datetimes. Send naive
+// local-time ISO strings (no "Z", no offset) for all scheduling fields.
+function dateInputToNaiveStart(v: string): string {
+  return `${v}T00:00:00`;
 }
 
-function dateInputToIsoEndExclusive(v: string): string {
+function dateInputToNaiveEndExclusive(v: string): string {
   const [y, m, d] = v.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, (d ?? 1) + 1, 0, 0, 0, 0).toISOString();
+  const next = new Date(y, (m ?? 1) - 1, (d ?? 1) + 1);
+  return `${toDateInput(next)}T00:00:00`;
+}
+
+// datetime-local inputs return "YYYY-MM-DDTHH:MM" — already naive local time.
+// Ensure trailing seconds for backend ISO-8601 parsing.
+function fromLocalInputNaive(v: string): string {
+  return v.length === 16 ? `${v}:00` : v;
+}
+
+function toLocalInput(iso: string): string {
+  // Convert backend ISO (naive) to "YYYY-MM-DDTHH:mm" for <input type="datetime-local">.
+  const d = new Date(iso);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
 }
 
 function formatTimeRange(startIso: string, endIso: string): string {
@@ -107,6 +130,38 @@ function isToday(key: string): boolean {
   );
 }
 
+interface FormState {
+  calendar_id: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  location: string;
+  start_time: string; // datetime-local
+  end_time: string;   // datetime-local
+}
+
+const EMPTY_FORM: FormState = {
+  calendar_id: "",
+  title: "",
+  description: "",
+  category: "",
+  priority: "",
+  location: "",
+  start_time: "",
+  end_time: "",
+};
+
+interface ConflictDetail {
+  reason_code: string;
+  message: string;
+  conflict_type?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  related_event_id?: number | null;
+  related_blocked_time_id?: number | null;
+}
+
 export default function SchedulePage() {
   const initial = defaultRange();
   const [startDate, setStartDate] = useState<string>(initial.start);
@@ -120,7 +175,15 @@ export default function SchedulePage() {
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+
+  // Inline event create/edit panel state.
+  const [formOpen, setFormOpen] = useState<boolean>(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [formConflicts, setFormConflicts] = useState<ConflictDetail[]>([]);
 
   const calendarsById = useMemo(() => {
     const map = new Map<number, Calendar>();
@@ -138,8 +201,8 @@ export default function SchedulePage() {
     try {
       const evs = await listEvents({
         calendarId: calId ? Number(calId) : undefined,
-        startTime: dateInputToIsoStart(start),
-        endTime: dateInputToIsoEndExclusive(end),
+        startTime: dateInputToNaiveStart(start),
+        endTime: dateInputToNaiveEndExclusive(end),
       });
       setEvents(evs);
     } catch (e) {
@@ -159,8 +222,8 @@ export default function SchedulePage() {
         const [cals, evs, m] = await Promise.all([
           listCalendars(),
           listEvents({
-            startTime: dateInputToIsoStart(appliedStart),
-            endTime: dateInputToIsoEndExclusive(appliedEnd),
+            startTime: dateInputToNaiveStart(appliedStart),
+            endTime: dateInputToNaiveEndExclusive(appliedEnd),
           }),
           getWeeklyMetrics().catch(() => null),
         ]);
@@ -183,13 +246,13 @@ export default function SchedulePage() {
 
   function onApply(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setFormError(null);
+    setRangeError(null);
     if (!startDate || !endDate) {
-      setFormError("Start and end dates are required.");
+      setRangeError("Start and end dates are required.");
       return;
     }
     if (startDate > endDate) {
-      setFormError("Start date must be before or equal to end date.");
+      setRangeError("Start date must be before or equal to end date.");
       return;
     }
     setAppliedStart(startDate);
@@ -202,10 +265,101 @@ export default function SchedulePage() {
     loadEvents(appliedStart, appliedEnd, v);
   }
 
+  function resetForm() {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormError(null);
+    setFormConflicts([]);
+  }
+
+  function openCreateForm() {
+    resetForm();
+    setFormOpen(true);
+  }
+
+  function startEdit(ev: Event) {
+    setEditingId(ev.id);
+    setFormError(null);
+    setFormConflicts([]);
+    setForm({
+      calendar_id: String(ev.calendar_id),
+      title: ev.title,
+      description: ev.description ?? "",
+      category: ev.category ?? "",
+      priority: ev.priority ?? "",
+      location: ev.location ?? "",
+      start_time: toLocalInput(ev.start_time),
+      end_time: toLocalInput(ev.end_time),
+    });
+    setFormOpen(true);
+  }
+
+  function cancelForm() {
+    resetForm();
+    setFormOpen(false);
+  }
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormError(null);
+    setFormConflicts([]);
+
+    if (!form.calendar_id) {
+      setFormError("Calendar is required.");
+      return;
+    }
+    if (!form.title.trim()) {
+      setFormError("Title is required.");
+      return;
+    }
+    if (!form.start_time || !form.end_time) {
+      setFormError("Start and end time are required.");
+      return;
+    }
+    if (new Date(form.start_time) >= new Date(form.end_time)) {
+      setFormError("Start time must be before end time.");
+      return;
+    }
+
+    const payload: EventCreate = {
+      calendar_id: Number(form.calendar_id),
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      category: form.category.trim() || null,
+      priority: form.priority.trim() || null,
+      location: form.location.trim() || null,
+      start_time: fromLocalInputNaive(form.start_time),
+      end_time: fromLocalInputNaive(form.end_time),
+    };
+
+    setSubmitting(true);
+    try {
+      if (editingId != null) {
+        await updateEvent(editingId, payload);
+      } else {
+        await createEvent(payload);
+      }
+      resetForm();
+      setFormOpen(false);
+      await loadEvents(appliedStart, appliedEnd, calendarFilter);
+    } catch (err) {
+      const conflicts = extractConflicts(err);
+      if (conflicts.length > 0) {
+        setFormConflicts(conflicts);
+        setFormError("Could not save event — see conflicts below.");
+      } else {
+        setFormError(describeError(err));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onDelete(id: number) {
     if (!window.confirm("Delete this event?")) return;
     try {
       await deleteEvent(id);
+      if (editingId === id) resetForm();
       await loadEvents(appliedStart, appliedEnd, calendarFilter);
     } catch (err) {
       setError(describeError(err));
@@ -280,12 +434,191 @@ export default function SchedulePage() {
               </option>
             ))}
           </select>
+
+          {!formOpen && (
+            <button
+              type="button"
+              className="primary"
+              onClick={openCreateForm}
+              style={{ marginLeft: "0.5rem" }}
+            >
+              + Add Event
+            </button>
+          )}
         </div>
       </div>
 
-      {formError && (
+      {rangeError && (
         <div className="error-box" role="alert">
-          {formError}
+          {rangeError}
+        </div>
+      )}
+
+      {/* Inline event create/edit panel */}
+      {formOpen && (
+        <div className="card" style={{ marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <h3 style={{ margin: 0 }}>
+              {editingId != null ? "Edit event" : "New event"}
+            </h3>
+            <button
+              type="button"
+              className="ghost"
+              onClick={cancelForm}
+              disabled={submitting}
+            >
+              Close
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="event-form">
+            <label>
+              Calendar *
+              <select
+                value={form.calendar_id}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, calendar_id: e.target.value }))
+                }
+                required
+              >
+                <option value="">Select a calendar…</option>
+                {calendars.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Title *
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, title: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Start *
+              <input
+                type="datetime-local"
+                value={form.start_time}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, start_time: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label>
+              End *
+              <input
+                type="datetime-local"
+                value={form.end_time}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, end_time: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Category
+              <input
+                type="text"
+                value={form.category}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, category: e.target.value }))
+                }
+              />
+            </label>
+
+            <label>
+              Priority
+              <input
+                type="text"
+                value={form.priority}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, priority: e.target.value }))
+                }
+                placeholder="low / medium / high"
+              />
+            </label>
+
+            <label>
+              Location
+              <input
+                type="text"
+                value={form.location}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, location: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="full">
+              Description
+              <textarea
+                rows={3}
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+              />
+            </label>
+
+            {formError && (
+              <div className="error-box full" role="alert">
+                {formError}
+              </div>
+            )}
+
+            {formConflicts.length > 0 && (
+              <div className="error-box full" role="alert">
+                <strong>Conflicts:</strong>
+                <ul style={{ margin: "0.5rem 0 0 1rem", padding: 0 }}>
+                  {formConflicts.map((c, i) => (
+                    <li key={i}>
+                      <span style={{ fontFamily: "monospace" }}>
+                        {c.reason_code}
+                      </span>
+                      {" — "}
+                      {c.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="form-actions full">
+              <button type="submit" className="primary" disabled={submitting}>
+                {submitting
+                  ? "Saving…"
+                  : editingId != null
+                  ? "Update event"
+                  : "Create event"}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={cancelForm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -360,11 +693,13 @@ export default function SchedulePage() {
                                 </div>
                               </div>
                               <div className="day-event-actions">
-                                <Link href="/events" className="ghost-link">
-                                  <button type="button" className="ghost">
-                                    Edit
-                                  </button>
-                                </Link>
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  onClick={() => startEdit(ev)}
+                                >
+                                  Edit
+                                </button>
                                 <button
                                   type="button"
                                   className="ghost"
@@ -387,15 +722,6 @@ export default function SchedulePage() {
 
         {/* Right sidebar */}
         <aside className="page-side">
-          {/* Availability entry point */}
-          <div className="cta-card">
-            <h3>Availability</h3>
-            <p>Manage availability windows and blocked times.</p>
-            <Link href="/availability" className="cta-link">
-              Manage availability
-            </Link>
-          </div>
-
           {/* Active filter / status summary */}
           <div className="sidebar-card">
             <div className="sidebar-card-title">
@@ -481,4 +807,22 @@ function describeError(e: unknown): string {
   }
   if (e instanceof Error) return e.message;
   return "Unknown error";
+}
+
+// Pull structured ConflictDetail entries out of a 409 response body, if any.
+function extractConflicts(e: unknown): ConflictDetail[] {
+  if (!(e instanceof ApiError) || e.status !== 409) return [];
+  const body = e.body as { detail?: unknown } | null;
+  if (!body || typeof body !== "object") return [];
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== "object") return [];
+  const conflicts = (detail as { conflicts?: unknown }).conflicts;
+  if (!Array.isArray(conflicts)) return [];
+  return conflicts.filter(
+    (c): c is ConflictDetail =>
+      !!c &&
+      typeof c === "object" &&
+      typeof (c as ConflictDetail).reason_code === "string" &&
+      typeof (c as ConflictDetail).message === "string"
+  );
 }

@@ -11,6 +11,8 @@ from app.models.schedule_summary import ScheduleSummary
 from app.schemas.schedule import (
     ConflictCheckRequest,
     ConflictCheckResponse,
+    RescheduleOptionsRequest,
+    RescheduleOptionsResponse,
     ScheduleSummaryRead,
     SuggestSlotsRequest,
     SuggestSlotsResponse,
@@ -19,6 +21,7 @@ from app.schemas.schedule import (
 )
 from app.services.conflict_detection import MVP_USER_ID, check_all_conflicts, find_available_slots
 from app.services.metrics import compute_weekly_metrics, monday_of
+from app.services.rescheduling import find_replacement_slots
 from app.services.triage import compute_weekly_triage
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
@@ -88,6 +91,31 @@ def weekly_metrics(
     Counts and minutes are clipped to the target week [Mon 00:00, next Mon 00:00).
     """
     return compute_weekly_metrics(session=session, week_start=week_start)
+
+
+@router.post("/reschedule-options", response_model=RescheduleOptionsResponse)
+def reschedule_options(
+    body: RescheduleOptionsRequest,
+    session: Session = Depends(get_session),
+):
+    """Return ranked replacement slots for an existing event.
+
+    Reuses the standard scheduling rules (event overlap, blocked-time overlap,
+    availability containment, touching-boundary semantics) and excludes the
+    target event from event-overlap checks. Does NOT modify the event.
+
+    Returns 404 when event_id does not exist.
+    """
+    result = find_replacement_slots(
+        event_id=body.event_id,
+        search_start=body.search_start,
+        search_end=body.search_end,
+        max_results=body.max_results,
+        session=session,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return result
 
 
 @router.get("/triage", response_model=TriageResponse)

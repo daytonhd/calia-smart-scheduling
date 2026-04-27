@@ -44,8 +44,10 @@ function toLocalInput(iso: string): string {
 }
 
 function fromLocalInput(v: string): string {
-  // Parse a datetime-local string as local time and return ISO UTC.
-  return new Date(v).toISOString();
+  // datetime-local inputs return "YYYY-MM-DDTHH:MM" — naive local time.
+  // Backend MVP time contract rejects tz-aware datetimes, so pass through
+  // naively (only adding seconds for ISO-8601 completeness).
+  return v.length === 16 ? `${v}:00` : v;
 }
 
 function formatDateTime(iso: string): string {
