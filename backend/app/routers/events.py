@@ -30,7 +30,7 @@ def create_event(body: EventCreate, session: Session = Depends(get_session)):
     if conflicts:
         raise HTTPException(
             status_code=409,
-            detail={"conflicts": [c.model_dump() for c in conflicts]},
+            detail={"conflicts": [c.model_dump(mode="json") for c in conflicts]},
         )
 
     event = Event(**body.model_dump())
@@ -110,7 +110,7 @@ def update_event(
     if conflicts:
         raise HTTPException(
             status_code=409,
-            detail={"conflicts": [c.model_dump() for c in conflicts]},
+            detail={"conflicts": [c.model_dump(mode="json") for c in conflicts]},
         )
 
     for field, value in updates.items():
