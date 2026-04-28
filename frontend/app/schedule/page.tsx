@@ -1,17 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  createBlockedTime,
   createEvent,
+  deleteBlockedTime,
   deleteEvent,
   getWeeklyMetrics,
+  listBlockedTimes,
   listCalendars,
   listEvents,
+  updateBlockedTime,
   updateEvent,
 } from "@/lib/api";
 import type {
+  BlockedTime,
+  BlockedTimeCreate,
   Calendar,
   Event,
   EventCreate,
@@ -50,11 +55,27 @@ function dateInputToNaiveEndExclusive(v: string): string {
   return `${toDateInput(next)}T00:00:00`;
 }
 
+// Convert a datetime-local input value into the naive ISO string the backend
+// expects. Defensively strips any trailing "Z" or timezone offset (datetime-
+// local should never produce these, but we guarantee the no-tz invariant) and
+// pads ":00" seconds when missing.
 function fromLocalInputNaive(v: string): string {
-  return v.length === 16 ? `${v}:00` : v;
+  if (!v) return v;
+  let s = v.replace(/Z$/, "").replace(/[+-]\d{2}:?\d{2}$/, "");
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s = `${s}:00`;
+  return s;
 }
 
+// Convert an ISO datetime from the backend into a datetime-local input value
+// (YYYY-MM-DDTHH:MM). Parses the wall-clock components directly from the
+// string when it is naive, so we never let `new Date` apply a local-time
+// shift to what we already know is naive.
 function toLocalInput(iso: string): string {
+  const naive = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (naive) {
+    const [, y, m, d, hh, mm] = naive;
+    return `${y}-${m}-${d}T${hh}:${mm}`;
+  }
   const d = new Date(iso);
   return (
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
@@ -66,14 +87,6 @@ function shiftDateInput(input: string, days: number): string {
   const [y, m, d] = input.split("-").map(Number);
   const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) + days);
   return toDateInput(dt);
-}
-
-function rangeDays(startInput: string, endInput: string): number {
-  const [sy, sm, sd] = startInput.split("-").map(Number);
-  const [ey, em, ed] = endInput.split("-").map(Number);
-  const start = new Date(sy, (sm ?? 1) - 1, sd ?? 1);
-  const end = new Date(ey, (em ?? 1) - 1, ed ?? 1);
-  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
 }
 
 function formatRangeLabel(startInput: string, endInput: string): string {
@@ -103,7 +116,7 @@ function formatTimeShort(iso: string): string {
 }
 
 function formatTimeRange(startIso: string, endIso: string): string {
-  return `${formatTimeShort(startIso)} → ${formatTimeShort(endIso)}`;
+  return `${formatTimeShort(startIso)} – ${formatTimeShort(endIso)}`;
 }
 
 function formatDayTime(iso: string): string {
@@ -114,6 +127,13 @@ function formatDayTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatHourLabel(h: number): string {
+  if (h === 0) return "12 AM";
+  if (h === 12) return "12 PM";
+  if (h < 12) return `${h} AM`;
+  return `${h - 12} PM`;
 }
 
 function buildDayKeys(startInput: string, endInput: string): string[] {
@@ -134,22 +154,14 @@ function buildDayKeys(startInput: string, endInput: string): string[] {
   return out;
 }
 
-function groupByDay(events: Event[]): Map<string, Event[]> {
-  const map = new Map<string, Event[]>();
-  for (const ev of events) {
-    const d = new Date(ev.start_time);
-    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const arr = map.get(key) ?? [];
-    arr.push(ev);
-    map.set(key, arr);
-  }
-  for (const arr of map.values()) {
-    arr.sort(
-      (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-    );
-  }
-  return map;
+function dayKeyOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function dayStartTime(dayKey: string): number {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1).getTime();
 }
 
 function isToday(key: string): boolean {
@@ -162,12 +174,6 @@ function isToday(key: string): boolean {
   );
 }
 
-function isWeekend(key: string): boolean {
-  const [y, m, d] = key.split("-").map(Number);
-  const dow = new Date(y, (m ?? 1) - 1, d ?? 1).getDay();
-  return dow === 0 || dow === 6;
-}
-
 function dayHeaderParts(key: string): { weekday: string; daynum: string } {
   const [y, m, d] = key.split("-").map(Number);
   const date = new Date(y, (m ?? 1) - 1, d ?? 1);
@@ -175,6 +181,70 @@ function dayHeaderParts(key: string): { weekday: string; daynum: string } {
     weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
     daynum: date.toLocaleDateString(undefined, { day: "numeric" }),
   };
+}
+
+// Calendar grid layout constants.
+const VISIBLE_START_HOUR = 8; // 8 AM
+const VISIBLE_END_HOUR = 18; // 6 PM (exclusive bottom)
+const VISIBLE_HOURS = VISIBLE_END_HOUR - VISIBLE_START_HOUR;
+const HOUR_HEIGHT = 56; // px per hour
+const GRID_HEIGHT = VISIBLE_HOURS * HOUR_HEIGHT;
+const HOUR_LABELS = Array.from(
+  { length: VISIBLE_HOURS + 1 },
+  (_, i) => VISIBLE_START_HOUR + i
+);
+
+// Decimal hours of `iso` relative to the given dayKey, clamped to [0, 24].
+function hoursOnDay(iso: string, dayKey: string): number {
+  const t = new Date(iso).getTime();
+  const dayStart = dayStartTime(dayKey);
+  const dayEnd = dayStart + 86400000;
+  if (t <= dayStart) return 0;
+  if (t >= dayEnd) return 24;
+  return (t - dayStart) / 3600000;
+}
+
+// Return absolute placement for an event/blocked-time on `dayKey`, clipped
+// to the visible 8 AM..6 PM window. Returns null if it does not overlap
+// the visible window on that day.
+function placeOnGrid(
+  startIso: string,
+  endIso: string,
+  dayKey: string
+): { top: number; height: number } | null {
+  const startH = hoursOnDay(startIso, dayKey);
+  const endH = hoursOnDay(endIso, dayKey);
+  const visibleStart = Math.max(startH, VISIBLE_START_HOUR);
+  const visibleEnd = Math.min(endH, VISIBLE_END_HOUR);
+  if (visibleEnd <= visibleStart) return null;
+  const top = (visibleStart - VISIBLE_START_HOUR) * HOUR_HEIGHT;
+  const height = Math.max(
+    18,
+    (visibleEnd - visibleStart) * HOUR_HEIGHT
+  );
+  return { top, height };
+}
+
+function overlapsDay(startIso: string, endIso: string, dayKey: string): boolean {
+  const dayStart = dayStartTime(dayKey);
+  const dayEnd = dayStart + 86400000;
+  return new Date(startIso).getTime() < dayEnd &&
+    new Date(endIso).getTime() > dayStart;
+}
+
+// Restrained event color palette keyed off calendar id.
+const EVENT_PALETTE = [
+  { bar: "#5d80c4", bg: "#eef3fb", border: "#cfdcef" }, // blue
+  { bar: "#7c9b6f", bg: "#eef4ea", border: "#d4e1cb" }, // green
+  { bar: "#a07ab8", bg: "#f3edf9", border: "#ddcfea" }, // purple
+  { bar: "#c98d54", bg: "#fbf1e6", border: "#eed5b8" }, // amber
+  { bar: "#c46868", bg: "#fbeded", border: "#eecaca" }, // red
+];
+
+function colorForCalendar(calendarId: number): typeof EVENT_PALETTE[number] {
+  const idx = ((calendarId % EVENT_PALETTE.length) + EVENT_PALETTE.length) %
+    EVENT_PALETTE.length;
+  return EVENT_PALETTE[idx];
 }
 
 interface FormState {
@@ -199,6 +269,22 @@ const EMPTY_FORM: FormState = {
   end_time: "",
 };
 
+interface BlockedFormState {
+  title: string;
+  reason: string;
+  notes: string;
+  start_time: string; // datetime-local
+  end_time: string;   // datetime-local
+}
+
+const EMPTY_BLOCKED_FORM: BlockedFormState = {
+  title: "",
+  reason: "",
+  notes: "",
+  start_time: "",
+  end_time: "",
+};
+
 interface ConflictDetail {
   reason_code: string;
   message: string;
@@ -217,6 +303,7 @@ export default function SchedulePage() {
 
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [blockedTimes, setBlockedTimes] = useState<BlockedTime[]>([]);
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -229,13 +316,21 @@ export default function SchedulePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formConflicts, setFormConflicts] = useState<ConflictDetail[]>([]);
 
+  // Inline blocked-time create/edit panel state.
+  const [blockedFormOpen, setBlockedFormOpen] = useState<boolean>(false);
+  const [blockedForm, setBlockedForm] =
+    useState<BlockedFormState>(EMPTY_BLOCKED_FORM);
+  const [editingBlockedId, setEditingBlockedId] = useState<number | null>(null);
+  const [blockedSubmitting, setBlockedSubmitting] = useState<boolean>(false);
+  const [blockedFormError, setBlockedFormError] = useState<string | null>(null);
+
   const calendarsById = useMemo(() => {
     const map = new Map<number, Calendar>();
     calendars.forEach((c) => map.set(c.id, c));
     return map;
   }, [calendars]);
 
-  async function loadEvents(
+  async function loadSchedule(
     start: string,
     end: string,
     calId: string
@@ -243,12 +338,20 @@ export default function SchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const evs = await listEvents({
-        calendarId: calId ? Number(calId) : undefined,
-        startTime: dateInputToNaiveStart(start),
-        endTime: dateInputToNaiveEndExclusive(end),
-      });
+      const startIso = dateInputToNaiveStart(start);
+      const endIso = dateInputToNaiveEndExclusive(end);
+      const [evs, blocks] = await Promise.all([
+        listEvents({
+          calendarId: calId ? Number(calId) : undefined,
+          startTime: startIso,
+          endTime: endIso,
+        }),
+        listBlockedTimes({ startTime: startIso, endTime: endIso }).catch(
+          () => [] as BlockedTime[]
+        ),
+      ]);
       setEvents(evs);
+      setBlockedTimes(blocks);
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -256,24 +359,27 @@ export default function SchedulePage() {
     }
   }
 
-  // Initial load: calendars + events + metrics
+  // Initial load: calendars + events + blocked times + metrics
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [cals, evs, m] = await Promise.all([
+        const startIso = dateInputToNaiveStart(appliedStart);
+        const endIso = dateInputToNaiveEndExclusive(appliedEnd);
+        const [cals, evs, blocks, m] = await Promise.all([
           listCalendars(),
-          listEvents({
-            startTime: dateInputToNaiveStart(appliedStart),
-            endTime: dateInputToNaiveEndExclusive(appliedEnd),
-          }),
+          listEvents({ startTime: startIso, endTime: endIso }),
+          listBlockedTimes({ startTime: startIso, endTime: endIso }).catch(
+            () => [] as BlockedTime[]
+          ),
           getWeeklyMetrics().catch(() => null),
         ]);
         if (cancelled) return;
         setCalendars(cals);
         setEvents(evs);
+        setBlockedTimes(blocks);
         setMetrics(m);
       } catch (e) {
         if (cancelled) return;
@@ -291,7 +397,7 @@ export default function SchedulePage() {
   function applyRange(start: string, end: string) {
     setAppliedStart(start);
     setAppliedEnd(end);
-    loadEvents(start, end, calendarFilter);
+    loadSchedule(start, end, calendarFilter);
   }
 
   function shiftWeek(days: number) {
@@ -308,7 +414,6 @@ export default function SchedulePage() {
   function onPickStart(v: string) {
     if (!v) return;
     if (v > appliedEnd) {
-      // Snap end to keep range valid (preserve 7-day window).
       const newEnd = shiftDateInput(v, 6);
       applyRange(v, newEnd);
     } else {
@@ -327,7 +432,7 @@ export default function SchedulePage() {
 
   function onCalendarFilterChange(v: string) {
     setCalendarFilter(v);
-    loadEvents(appliedStart, appliedEnd, v);
+    loadSchedule(appliedStart, appliedEnd, v);
   }
 
   function resetForm() {
@@ -339,6 +444,7 @@ export default function SchedulePage() {
 
   function openCreateForm() {
     resetForm();
+    closeBlockedForm();
     setFormOpen(true);
   }
 
@@ -356,12 +462,104 @@ export default function SchedulePage() {
       start_time: toLocalInput(ev.start_time),
       end_time: toLocalInput(ev.end_time),
     });
+    closeBlockedForm();
     setFormOpen(true);
   }
 
   function cancelForm() {
     resetForm();
     setFormOpen(false);
+  }
+
+  function resetBlockedForm() {
+    setBlockedForm(EMPTY_BLOCKED_FORM);
+    setEditingBlockedId(null);
+    setBlockedFormError(null);
+  }
+
+  function closeBlockedForm() {
+    resetBlockedForm();
+    setBlockedFormOpen(false);
+  }
+
+  function openCreateBlocked() {
+    resetBlockedForm();
+    // Close the event panel so only one form is open at a time.
+    resetForm();
+    setFormOpen(false);
+    setBlockedFormOpen(true);
+  }
+
+  function startEditBlocked(b: BlockedTime) {
+    setEditingBlockedId(b.id);
+    setBlockedFormError(null);
+    setBlockedForm({
+      title: b.title,
+      reason: b.reason ?? "",
+      notes: b.notes ?? "",
+      start_time: toLocalInput(b.start_time),
+      end_time: toLocalInput(b.end_time),
+    });
+    // Close the event panel so only one form is open at a time.
+    resetForm();
+    setFormOpen(false);
+    setBlockedFormOpen(true);
+  }
+
+  function cancelBlockedForm() {
+    closeBlockedForm();
+  }
+
+  async function onSubmitBlocked(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBlockedFormError(null);
+
+    if (!blockedForm.title.trim()) {
+      setBlockedFormError("Title is required.");
+      return;
+    }
+    if (!blockedForm.start_time || !blockedForm.end_time) {
+      setBlockedFormError("Start and end time are required.");
+      return;
+    }
+    if (new Date(blockedForm.start_time) >= new Date(blockedForm.end_time)) {
+      setBlockedFormError("Start time must be before end time.");
+      return;
+    }
+
+    const payload: BlockedTimeCreate = {
+      title: blockedForm.title.trim(),
+      reason: blockedForm.reason.trim() || null,
+      notes: blockedForm.notes.trim() || null,
+      start_time: fromLocalInputNaive(blockedForm.start_time),
+      end_time: fromLocalInputNaive(blockedForm.end_time),
+    };
+
+    setBlockedSubmitting(true);
+    try {
+      if (editingBlockedId != null) {
+        await updateBlockedTime(editingBlockedId, payload);
+      } else {
+        await createBlockedTime(payload);
+      }
+      closeBlockedForm();
+      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
+    } catch (err) {
+      setBlockedFormError(describeError(err));
+    } finally {
+      setBlockedSubmitting(false);
+    }
+  }
+
+  async function onDeleteBlocked(id: number) {
+    if (!window.confirm("Delete this blocked time?")) return;
+    try {
+      await deleteBlockedTime(id);
+      if (editingBlockedId === id) closeBlockedForm();
+      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
+    } catch (err) {
+      setError(describeError(err));
+    }
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -406,7 +604,7 @@ export default function SchedulePage() {
       }
       resetForm();
       setFormOpen(false);
-      await loadEvents(appliedStart, appliedEnd, calendarFilter);
+      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
     } catch (err) {
       const conflicts = extractConflicts(err);
       if (conflicts.length > 0) {
@@ -425,13 +623,12 @@ export default function SchedulePage() {
     try {
       await deleteEvent(id);
       if (editingId === id) resetForm();
-      await loadEvents(appliedStart, appliedEnd, calendarFilter);
+      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
     } catch (err) {
       setError(describeError(err));
     }
   }
 
-  const grouped = useMemo(() => groupByDay(events), [events]);
   const dayKeys = useMemo(
     () => buildDayKeys(appliedStart, appliedEnd),
     [appliedStart, appliedEnd]
@@ -447,8 +644,6 @@ export default function SchedulePage() {
       )
       .slice(0, 5);
   }, [events]);
-
-  const totalDays = rangeDays(appliedStart, appliedEnd);
 
   return (
     <section>
@@ -535,9 +730,14 @@ export default function SchedulePage() {
             + Add Event
           </button>
 
-          <Link href="/availability" className="button-link">
+          <button
+            type="button"
+            className="ghost"
+            onClick={openCreateBlocked}
+            disabled={blockedFormOpen && editingBlockedId == null}
+          >
             + Add Blocked Time
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -709,90 +909,315 @@ export default function SchedulePage() {
         </div>
       )}
 
-      <div className="page-grid">
-        {/* Main: 7-column week board */}
-        <div className="page-main">
-          {loading ? (
-            <div className="card">
-              <p className="muted" style={{ margin: 0 }}>
-                Loading schedule…
-              </p>
-            </div>
-          ) : (
-            <div className="week-grid-wrap">
-              <div
-                className="week-grid"
-                style={{
-                  gridTemplateColumns: `repeat(${dayKeys.length}, minmax(140px, 1fr))`,
-                }}
-              >
-                {dayKeys.map((key) => {
-                  const dayEvents = grouped.get(key) ?? [];
-                  const { weekday, daynum } = dayHeaderParts(key);
-                  const today = isToday(key);
-                  const weekend = isWeekend(key);
-                  const classes = ["week-col"];
-                  if (today) classes.push("is-today");
-                  if (weekend) classes.push("is-weekend");
-                  return (
-                    <div key={key} className={classes.join(" ")}>
-                      <div className="week-col-header">
-                        <div className="week-col-header-left">
-                          <span className="week-col-day">{weekday}</span>
-                          <span className="week-col-num">{daynum}</span>
-                        </div>
-                        <span className="week-col-count">
-                          {dayEvents.length === 0
-                            ? "—"
-                            : `${dayEvents.length}`}
-                        </span>
-                      </div>
+      {/* Inline blocked-time create/edit panel */}
+      {blockedFormOpen && (
+        <div className="card" style={{ marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <h3 style={{ margin: 0 }}>
+              {editingBlockedId != null
+                ? "Edit blocked time"
+                : "New blocked time"}
+            </h3>
+            <button
+              type="button"
+              className="ghost"
+              onClick={cancelBlockedForm}
+              disabled={blockedSubmitting}
+            >
+              Close
+            </button>
+          </div>
 
-                      {dayEvents.length === 0 ? (
-                        <div className="week-col-empty">No events</div>
-                      ) : (
-                        <ul className="week-col-events">
-                          {dayEvents.map((ev) => {
-                            const cal = calendarsById.get(ev.calendar_id);
-                            return (
-                              <li key={ev.id} className="week-event">
-                                <div className="week-event-time">
-                                  {formatTimeRange(ev.start_time, ev.end_time)}
-                                </div>
-                                <div className="week-event-title">
-                                  {ev.title}
-                                </div>
-                                <div className="week-event-meta">
-                                  {cal ? cal.name : `cal #${ev.calendar_id}`}
-                                  {ev.priority ? ` · ${ev.priority}` : ""}
-                                  {ev.location ? ` · ${ev.location}` : ""}
-                                </div>
-                                <div className="week-event-actions">
-                                  <button
-                                    type="button"
-                                    className="ghost"
-                                    onClick={() => startEdit(ev)}
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="ghost"
-                                    onClick={() => onDelete(ev.id)}
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
+          <form onSubmit={onSubmitBlocked} className="event-form">
+            <label>
+              Title *
+              <input
+                type="text"
+                value={blockedForm.title}
+                onChange={(e) =>
+                  setBlockedForm((f) => ({ ...f, title: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Reason
+              <input
+                type="text"
+                value={blockedForm.reason}
+                onChange={(e) =>
+                  setBlockedForm((f) => ({ ...f, reason: e.target.value }))
+                }
+                placeholder="e.g. Focus time, PTO"
+              />
+            </label>
+
+            <label>
+              Start *
+              <input
+                type="datetime-local"
+                value={blockedForm.start_time}
+                onChange={(e) =>
+                  setBlockedForm((f) => ({ ...f, start_time: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label>
+              End *
+              <input
+                type="datetime-local"
+                value={blockedForm.end_time}
+                onChange={(e) =>
+                  setBlockedForm((f) => ({ ...f, end_time: e.target.value }))
+                }
+                required
+              />
+            </label>
+
+            <label className="full">
+              Notes
+              <textarea
+                rows={3}
+                value={blockedForm.notes}
+                onChange={(e) =>
+                  setBlockedForm((f) => ({ ...f, notes: e.target.value }))
+                }
+              />
+            </label>
+
+            {blockedFormError && (
+              <div className="error-box full" role="alert">
+                {blockedFormError}
               </div>
+            )}
+
+            <div className="form-actions full">
+              <button
+                type="submit"
+                className="primary"
+                disabled={blockedSubmitting}
+              >
+                {blockedSubmitting
+                  ? "Saving…"
+                  : editingBlockedId != null
+                  ? "Update blocked time"
+                  : "Create blocked time"}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={cancelBlockedForm}
+                disabled={blockedSubmitting}
+              >
+                Cancel
+              </button>
             </div>
+          </form>
+        </div>
+      )}
+
+      <div className="page-grid schedule-page-grid">
+        {/* Main: weekly calendar grid */}
+        <div className="page-main">
+          <div className="cal-panel">
+            {/* Day headers */}
+            <div className="cal-row cal-header-row">
+              <div className="cal-time-cell cal-time-corner" aria-hidden />
+              {dayKeys.map((key) => {
+                const { weekday, daynum } = dayHeaderParts(key);
+                const today = isToday(key);
+                return (
+                  <div
+                    key={key}
+                    className={`cal-day-header${today ? " is-today" : ""}`}
+                  >
+                    <div className="cal-day-header-text">
+                      <span className="cal-day-weekday">{weekday}</span>
+                      <span className="cal-day-num">{daynum}</span>
+                    </div>
+                    {today && <span className="cal-today-dot" aria-hidden />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* All-day row */}
+            <div className="cal-row cal-allday-row">
+              <div className="cal-time-cell cal-allday-label">All day</div>
+              {dayKeys.map((key) => (
+                <div key={key} className="cal-allday-cell" />
+              ))}
+            </div>
+
+            {/* Body: time gutter + day columns with hour grid */}
+            <div className="cal-body">
+              <div
+                className="cal-time-gutter"
+                style={{ height: GRID_HEIGHT }}
+                aria-hidden
+              >
+                {HOUR_LABELS.map((h) => (
+                  <div
+                    key={h}
+                    className="cal-hour-label"
+                    style={{ top: (h - VISIBLE_START_HOUR) * HOUR_HEIGHT }}
+                  >
+                    {formatHourLabel(h)}
+                  </div>
+                ))}
+              </div>
+
+              {dayKeys.map((key, idx) => {
+                const dayEvents = events.filter((ev) =>
+                  overlapsDay(ev.start_time, ev.end_time, key)
+                );
+                const dayBlocks = blockedTimes.filter((b) =>
+                  overlapsDay(b.start_time, b.end_time, key)
+                );
+                const today = isToday(key);
+                const alt = idx % 2 === 1;
+                const colClasses = ["cal-day-col"];
+                if (alt) colClasses.push("is-alt");
+                if (today) colClasses.push("is-today");
+                return (
+                  <div
+                    key={key}
+                    className={colClasses.join(" ")}
+                    style={{ height: GRID_HEIGHT }}
+                  >
+                    {/* Blocked / unavailable time */}
+                    {dayBlocks.map((b) => {
+                      const place = placeOnGrid(
+                        b.start_time,
+                        b.end_time,
+                        key
+                      );
+                      if (!place) return null;
+                      return (
+                        <div
+                          key={`b-${b.id}-${key}`}
+                          className="cal-blocked"
+                          style={{ top: place.top, height: place.height }}
+                          title={`${b.title} • Blocked`}
+                        >
+                          <button
+                            type="button"
+                            className="cal-blocked-inner"
+                            onClick={() => startEditBlocked(b)}
+                            aria-label={`Edit blocked time ${b.title}`}
+                          >
+                            <span
+                              className="cal-blocked-icon"
+                              aria-hidden
+                            >
+                              ⊘
+                            </span>
+                            <div className="cal-blocked-text">
+                              <div className="cal-blocked-title">
+                                {b.title}
+                              </div>
+                              {place.height >= 40 && (
+                                <div className="cal-blocked-time">
+                                  {formatTimeRange(b.start_time, b.end_time)}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className="cal-event-del"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteBlocked(b.id);
+                            }}
+                            aria-label={`Delete blocked time ${b.title}`}
+                            title="Delete"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {/* Events */}
+                    {dayEvents.map((ev) => {
+                      const place = placeOnGrid(
+                        ev.start_time,
+                        ev.end_time,
+                        key
+                      );
+                      if (!place) return null;
+                      const color = colorForCalendar(ev.calendar_id);
+                      const cal = calendarsById.get(ev.calendar_id);
+                      return (
+                        <div
+                          key={`e-${ev.id}-${key}`}
+                          className="cal-event"
+                          style={{
+                            top: place.top,
+                            height: place.height,
+                            background: color.bg,
+                            borderColor: color.border,
+                            borderLeftColor: color.bar,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="cal-event-body"
+                            onClick={() => startEdit(ev)}
+                            title={`${ev.title} — ${formatTimeRange(
+                              ev.start_time,
+                              ev.end_time
+                            )}`}
+                          >
+                            <div className="cal-event-title">{ev.title}</div>
+                            {place.height >= 40 && (
+                              <div className="cal-event-time">
+                                {formatTimeRange(ev.start_time, ev.end_time)}
+                              </div>
+                            )}
+                            {place.height >= 78 && (cal || ev.location) && (
+                              <div className="cal-event-meta">
+                                {cal ? cal.name : `cal #${ev.calendar_id}`}
+                                {ev.location ? ` · ${ev.location}` : ""}
+                              </div>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="cal-event-del"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDelete(ev.id);
+                            }}
+                            aria-label={`Delete ${ev.title}`}
+                            title="Delete"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {loading && (
+            <p className="muted small" style={{ marginTop: "0.6rem" }}>
+              Loading schedule…
+            </p>
           )}
         </div>
 
@@ -813,47 +1238,26 @@ export default function SchedulePage() {
               </div>
             ) : (
               <ul className="list-rows">
-                {upcoming.map((e) => (
-                  <li key={e.id}>
-                    <div className="row-icon" aria-hidden>
-                      ▣
-                    </div>
-                    <div className="row-body">
-                      <div className="row-title">{e.title}</div>
-                      <div className="row-meta">
-                        {formatDayTime(e.start_time)}
+                {upcoming.map((e) => {
+                  const color = colorForCalendar(e.calendar_id);
+                  return (
+                    <li key={e.id}>
+                      <span
+                        className="row-dot"
+                        style={{ background: color.bar }}
+                        aria-hidden
+                      />
+                      <div className="row-body">
+                        <div className="row-title">{e.title}</div>
+                        <div className="row-meta">
+                          {formatDayTime(e.start_time)}
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
-          </div>
-
-          {/* Current view summary */}
-          <div className="sidebar-card">
-            <div className="sidebar-card-title">
-              <span>Current view</span>
-            </div>
-            <div className="metric-rows">
-              <div className="metric-row">
-                <span className="metric-label">Days</span>
-                <span className="metric-value">{totalDays}</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Events</span>
-                <span className="metric-value">{events.length}</span>
-              </div>
-              <div className="metric-row">
-                <span className="metric-label">Calendar</span>
-                <span className="metric-value">
-                  {calendarFilter
-                    ? calendarsById.get(Number(calendarFilter))?.name ??
-                      `#${calendarFilter}`
-                    : "All"}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Weekly metrics */}

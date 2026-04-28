@@ -33,6 +33,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  const method = (init?.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(init?.headers as Record<string, string> | undefined),
@@ -41,7 +42,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url, { ...init, headers, cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers, cache: "no-store" });
+  } catch (err) {
+    // fetch() throws TypeError on network errors (server unreachable,
+    // CORS denial, DNS failure, etc.). Surface a useful diagnostic
+    // instead of the bare "Failed to fetch" / "Load failed".
+    const reason =
+      err instanceof Error && err.message ? err.message : "network error";
+    throw new ApiError(
+      `Could not reach API at ${method} ${url} (${reason}). Is the backend running on ${API_BASE_URL}?`,
+      0,
+      null
+    );
+  }
 
   if (res.status === 204) {
     return undefined as T;
