@@ -937,6 +937,218 @@ button:disabled {
   margin-top: 0.55rem;
 }
 
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow: hidden;
+  animation: modal-fade-in 140ms ease-out;
+}
+
+.modal-card {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.18),
+    0 4px 12px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  animation: modal-pop-in 160ms ease-out;
+}
+
+/* The <form> sits between .modal-card and its header/body/footer.
+   It must adopt the flex column layout so the body can scroll while
+   the header and footer stay pinned. */
+.modal-form-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.modal-header {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 1.1rem 1.5rem 0.5rem;
+  padding-right: 3rem; /* leave room for the close button */
+}
+
+.modal-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.55rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.modal-subtitle {
+  margin: 0.25rem 0 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-close:hover:not(:disabled) {
+  background: var(--accent-softer);
+  color: var(--fg);
+  border: none;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.85rem 1.5rem 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.modal-footer {
+  flex: 0 0 auto;
+  padding: 0.8rem 1.5rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+/* Form layout used inside the modal. */
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.modal-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.modal-form .form-field > label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--fg-soft);
+}
+
+.modal-form .form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.modal-form .form-row .date-time {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.modal-form textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+/* Cancel button inside the modal — neutral, slightly understated. */
+.modal-footer button.secondary {
+  background: #fff;
+  color: var(--fg-soft);
+  border: 1px solid var(--border-strong);
+}
+
+.modal-footer button.secondary:hover:not(:disabled) {
+  border-color: var(--fg-soft);
+  color: var(--fg);
+}
+
+/* Lower info area for future conflict / scheduling suggestion content. */
+.modal-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--accent-softer);
+  border: 1px solid #e2ecf8;
+  border-radius: var(--radius-control);
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+}
+
+.modal-info-icon {
+  flex-shrink: 0;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.modal-info.muted {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.modal-info.danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger-fg);
+}
+
+@media (max-width: 520px) {
+  .modal-form .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------- Weekly calendar time grid ---------- */
 
 /* Soft, warm tint shared by the calendar surfaces. */
