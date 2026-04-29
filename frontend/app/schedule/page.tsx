@@ -7,6 +7,8 @@ import {
   createEvent,
   deleteBlockedTime,
   deleteEvent,
+  getProposedRescheduleOptions,
+  getRescheduleOptions,
   getWeeklyMetrics,
   listBlockedTimes,
   listCalendars,
@@ -20,6 +22,7 @@ import type {
   Calendar,
   Event,
   EventCreate,
+  RescheduleOption,
   WeeklyMetrics,
 } from "@/lib/types";
 
@@ -126,6 +129,15 @@ function formatDayTime(iso: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+function formatLongDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
@@ -254,8 +266,10 @@ interface FormState {
   category: string;
   priority: string;
   location: string;
-  start_time: string; // datetime-local
-  end_time: string;   // datetime-local
+  start_date: string; // YYYY-MM-DD
+  start_time: string; // HH:MM
+  end_date: string;   // YYYY-MM-DD
+  end_time: string;   // HH:MM
 }
 
 const EMPTY_FORM: FormState = {
@@ -265,9 +279,31 @@ const EMPTY_FORM: FormState = {
   category: "",
   priority: "",
   location: "",
+  start_date: "",
   start_time: "",
+  end_date: "",
   end_time: "",
 };
+
+// Split a naive ISO datetime ("YYYY-MM-DDTHH:MM[:SS]") into a date+time pair
+// suitable for the modal's split inputs. Falls back to wall-clock components
+// of the parsed Date if the value is not in the expected naive shape.
+function splitIsoToParts(iso: string): { date: string; time: string } {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(iso);
+  if (m) return { date: m[1], time: m[2] };
+  const d = new Date(iso);
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+// Compose a naive ISO datetime from a date input + time input pair.
+function composeNaiveIso(date: string, time: string): string {
+  if (!date || !time) return "";
+  const t = /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : time;
+  return `${date}T${t}`;
+}
 
 interface BlockedFormState {
   title: string;
@@ -315,6 +351,21 @@ export default function SchedulePage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formConflicts, setFormConflicts] = useState<ConflictDetail[]>([]);
+
+  // Replacement options state inside the Add/Edit modal (conflict recovery).
+  const [formOptions, setFormOptions] = useState<RescheduleOption[] | null>(null);
+  const [formOptionsLoading, setFormOptionsLoading] = useState<boolean>(false);
+  const [formOptionsError, setFormOptionsError] = useState<string | null>(null);
+
+  // Event Details modal state. View modes: "details" or "options".
+  const [detailsEvent, setDetailsEvent] = useState<Event | null>(null);
+  const [detailsView, setDetailsView] = useState<"details" | "options">("details");
+  const [detailsOptions, setDetailsOptions] =
+    useState<RescheduleOption[] | null>(null);
+  const [detailsOptionsLoading, setDetailsOptionsLoading] =
+    useState<boolean>(false);
+  const [detailsOptionsError, setDetailsOptionsError] =
+    useState<string | null>(null);
 
   // Inline blocked-time create/edit panel state.
   const [blockedFormOpen, setBlockedFormOpen] = useState<boolean>(false);
@@ -394,6 +445,32 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Close the event modal on Escape (only while it's open).
+  useEffect(() => {
+    if (!formOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !submitting) {
+        cancelForm();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formOpen, submitting]);
+
+  // Close the event details modal on Escape (only while it's open).
+  useEffect(() => {
+    if (!detailsEvent) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        closeDetails();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailsEvent]);
+
   function applyRange(start: string, end: string) {
     setAppliedStart(start);
     setAppliedEnd(end);
@@ -440,6 +517,9 @@ export default function SchedulePage() {
     setEditingId(null);
     setFormError(null);
     setFormConflicts([]);
+    setFormOptions(null);
+    setFormOptionsLoading(false);
+    setFormOptionsError(null);
   }
 
   function openCreateForm() {
@@ -452,6 +532,10 @@ export default function SchedulePage() {
     setEditingId(ev.id);
     setFormError(null);
     setFormConflicts([]);
+    setFormOptions(null);
+    setFormOptionsError(null);
+    const start = splitIsoToParts(ev.start_time);
+    const end = splitIsoToParts(ev.end_time);
     setForm({
       calendar_id: String(ev.calendar_id),
       title: ev.title,
@@ -459,8 +543,10 @@ export default function SchedulePage() {
       category: ev.category ?? "",
       priority: ev.priority ?? "",
       location: ev.location ?? "",
-      start_time: toLocalInput(ev.start_time),
-      end_time: toLocalInput(ev.end_time),
+      start_date: start.date,
+      start_time: start.time,
+      end_date: end.date,
+      end_time: end.time,
     });
     closeBlockedForm();
     setFormOpen(true);
@@ -469,6 +555,196 @@ export default function SchedulePage() {
   function cancelForm() {
     resetForm();
     setFormOpen(false);
+  }
+
+  // ----- Event Details modal -----
+
+  function openDetails(ev: Event) {
+    setDetailsEvent(ev);
+    setDetailsView("details");
+    setDetailsOptions(null);
+    setDetailsOptionsError(null);
+    setDetailsOptionsLoading(false);
+  }
+
+  function closeDetails() {
+    setDetailsEvent(null);
+    setDetailsView("details");
+    setDetailsOptions(null);
+    setDetailsOptionsError(null);
+    setDetailsOptionsLoading(false);
+  }
+
+  function editFromDetails() {
+    if (!detailsEvent) return;
+    const ev = detailsEvent;
+    closeDetails();
+    closeBlockedForm();
+    startEdit(ev);
+    setFormOpen(true);
+  }
+
+  async function deleteFromDetails() {
+    if (!detailsEvent) return;
+    const id = detailsEvent.id;
+    closeDetails();
+    await onDelete(id);
+  }
+
+  // Build a 14-day search window starting from the event's original start day.
+  function searchWindowForEvent(ev: Event): { start: string; end: string } {
+    const m = /^(\d{4}-\d{2}-\d{2})T/.exec(ev.start_time);
+    const startDay = m ? m[1] : ev.start_time.slice(0, 10);
+    const start = `${startDay}T00:00:00`;
+    const end = `${shiftDateInput(startDay, 14)}T00:00:00`;
+    return { start, end };
+  }
+
+  async function loadDetailsOptions() {
+    if (!detailsEvent) return;
+    setDetailsView("options");
+    setDetailsOptions(null);
+    setDetailsOptionsError(null);
+    setDetailsOptionsLoading(true);
+    try {
+      const win = searchWindowForEvent(detailsEvent);
+      const res = await getRescheduleOptions({
+        event_id: detailsEvent.id,
+        search_start: win.start,
+        search_end: win.end,
+        max_results: 5,
+      });
+      setDetailsOptions(res.options);
+    } catch (err) {
+      setDetailsOptionsError(describeError(err));
+    } finally {
+      setDetailsOptionsLoading(false);
+    }
+  }
+
+  function chooseOptionFromDetails(opt: RescheduleOption) {
+    if (!detailsEvent) return;
+    const ev = detailsEvent;
+    closeDetails();
+    closeBlockedForm();
+    // Pre-populate the edit form for this event.
+    startEdit(ev);
+    // Then overlay the chosen start/end values.
+    const s = splitIsoToParts(opt.start_time);
+    const e = splitIsoToParts(opt.end_time);
+    setForm((f) => ({
+      ...f,
+      start_date: s.date,
+      start_time: s.time,
+      end_date: e.date,
+      end_time: e.time,
+    }));
+    setFormOpen(true);
+  }
+
+  // ----- Replacement options inside the Add/Edit modal (conflict recovery) -----
+
+  async function loadFormReplacementOptions() {
+    setFormOptions(null);
+    setFormOptionsError(null);
+
+    if (editingId != null) {
+      // Saved-event flow: use the original event's start day (or current
+      // form value, or today) as the anchor.
+      setFormOptionsLoading(true);
+      try {
+        const original = events.find((e) => e.id === editingId);
+        const anchorIso =
+          original?.start_time ??
+          (composeNaiveIso(form.start_date, form.start_time) ||
+            `${toDateInput(new Date())}T00:00:00`);
+        const m = /^(\d{4}-\d{2}-\d{2})T/.exec(anchorIso);
+        const anchorDay = m ? m[1] : toDateInput(new Date());
+        const search_start = `${anchorDay}T00:00:00`;
+        const search_end = `${shiftDateInput(anchorDay, 14)}T00:00:00`;
+        const res = await getRescheduleOptions({
+          event_id: editingId,
+          search_start,
+          search_end,
+          max_results: 5,
+        });
+        setFormOptions(res.options);
+      } catch (err) {
+        setFormOptionsError(describeError(err));
+      } finally {
+        setFormOptionsLoading(false);
+      }
+      return;
+    }
+
+    // Brand-new (unsaved) proposed-event flow. Validate the form first so
+    // we have a concrete proposal to send to the backend.
+    if (!form.calendar_id) {
+      setFormOptionsError("Calendar is required.");
+      return;
+    }
+    if (!form.title.trim()) {
+      setFormOptionsError("Title is required.");
+      return;
+    }
+    if (
+      !form.start_date ||
+      !form.start_time ||
+      !form.end_date ||
+      !form.end_time
+    ) {
+      setFormOptionsError("Start and end date/time are required.");
+      return;
+    }
+    const startIso = fromLocalInputNaive(
+      composeNaiveIso(form.start_date, form.start_time)
+    );
+    const endIso = fromLocalInputNaive(
+      composeNaiveIso(form.end_date, form.end_time)
+    );
+    if (new Date(startIso) >= new Date(endIso)) {
+      setFormOptionsError("Start time must be before end time.");
+      return;
+    }
+
+    const anchorDay = form.start_date;
+    const search_start = `${anchorDay}T00:00:00`;
+    const search_end = `${shiftDateInput(anchorDay, 14)}T23:59:00`;
+
+    setFormOptionsLoading(true);
+    try {
+      const res = await getProposedRescheduleOptions({
+        calendar_id: Number(form.calendar_id),
+        title: form.title.trim(),
+        start_time: startIso,
+        end_time: endIso,
+        search_start,
+        search_end,
+        max_results: 5,
+      });
+      setFormOptions(res.options);
+    } catch (err) {
+      setFormOptionsError(describeError(err));
+    } finally {
+      setFormOptionsLoading(false);
+    }
+  }
+
+  function chooseOptionInForm(opt: RescheduleOption) {
+    const s = splitIsoToParts(opt.start_time);
+    const e = splitIsoToParts(opt.end_time);
+    setForm((f) => ({
+      ...f,
+      start_date: s.date,
+      start_time: s.time,
+      end_date: e.date,
+      end_time: e.time,
+    }));
+    // Clear stale conflict state — user has picked a candidate.
+    setFormConflicts([]);
+    setFormError(null);
+    setFormOptions(null);
+    setFormOptionsError(null);
   }
 
   function resetBlockedForm() {
@@ -566,6 +842,8 @@ export default function SchedulePage() {
     e.preventDefault();
     setFormError(null);
     setFormConflicts([]);
+    setFormOptions(null);
+    setFormOptionsError(null);
 
     if (!form.calendar_id) {
       setFormError("Calendar is required.");
@@ -575,11 +853,18 @@ export default function SchedulePage() {
       setFormError("Title is required.");
       return;
     }
-    if (!form.start_time || !form.end_time) {
-      setFormError("Start and end time are required.");
+    if (
+      !form.start_date ||
+      !form.start_time ||
+      !form.end_date ||
+      !form.end_time
+    ) {
+      setFormError("Start and end date/time are required.");
       return;
     }
-    if (new Date(form.start_time) >= new Date(form.end_time)) {
+    const startIso = composeNaiveIso(form.start_date, form.start_time);
+    const endIso = composeNaiveIso(form.end_date, form.end_time);
+    if (new Date(startIso) >= new Date(endIso)) {
       setFormError("Start time must be before end time.");
       return;
     }
@@ -591,8 +876,8 @@ export default function SchedulePage() {
       category: form.category.trim() || null,
       priority: form.priority.trim() || null,
       location: form.location.trim() || null,
-      start_time: fromLocalInputNaive(form.start_time),
-      end_time: fromLocalInputNaive(form.end_time),
+      start_time: fromLocalInputNaive(startIso),
+      end_time: fromLocalInputNaive(endIso),
     };
 
     setSubmitting(true);
@@ -741,171 +1026,509 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {/* Inline event create/edit panel */}
+      {/* Add / Edit Event modal */}
       {formOpen && (
-        <div className="card" style={{ marginBottom: "1.25rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <h3 style={{ margin: 0 }}>
-              {editingId != null ? "Edit event" : "New event"}
-            </h3>
-            <button
-              type="button"
-              className="ghost"
-              onClick={cancelForm}
-              disabled={submitting}
-            >
-              Close
-            </button>
-          </div>
-
-          <form onSubmit={onSubmit} className="event-form">
-            <label>
-              Calendar *
-              <select
-                value={form.calendar_id}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, calendar_id: e.target.value }))
-                }
-                required
-              >
-                <option value="">Select a calendar…</option>
-                {calendars.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Title *
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, title: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label>
-              Start *
-              <input
-                type="datetime-local"
-                value={form.start_time}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, start_time: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label>
-              End *
-              <input
-                type="datetime-local"
-                value={form.end_time}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, end_time: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label>
-              Category
-              <input
-                type="text"
-                value={form.category}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, category: e.target.value }))
-                }
-              />
-            </label>
-
-            <label>
-              Priority
-              <input
-                type="text"
-                value={form.priority}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, priority: e.target.value }))
-                }
-                placeholder="low / medium / high"
-              />
-            </label>
-
-            <label>
-              Location
-              <input
-                type="text"
-                value={form.location}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, location: e.target.value }))
-                }
-              />
-            </label>
-
-            <label className="full">
-              Description
-              <textarea
-                rows={3}
-                value={form.description}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, description: e.target.value }))
-                }
-              />
-            </label>
-
-            {formError && (
-              <div className="error-box full" role="alert">
-                {formError}
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-modal-title"
+          onMouseDown={(e) => {
+            // Close only when the click starts on the backdrop itself,
+            // not on a drag that originated inside the modal card.
+            if (e.target === e.currentTarget && !submitting) {
+              cancelForm();
+            }
+          }}
+        >
+          <div className="modal-card">
+            <form onSubmit={onSubmit} className="modal-form-wrapper">
+              <div className="modal-header">
+                <h2 id="event-modal-title" className="modal-title">
+                  {editingId != null ? "Edit Event" : "Add Event"}
+                </h2>
+                <p className="modal-subtitle">
+                  {editingId != null
+                    ? "Update an existing event in your schedule."
+                    : "Create a new event in your schedule."}
+                </p>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={cancelForm}
+                  disabled={submitting}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
               </div>
-            )}
 
-            {formConflicts.length > 0 && (
-              <div className="error-box full" role="alert">
-                <strong>Conflicts:</strong>
-                <ul style={{ margin: "0.5rem 0 0 1rem", padding: 0 }}>
-                  {formConflicts.map((c, i) => (
-                    <li key={i}>
-                      <span style={{ fontFamily: "monospace" }}>
-                        {c.reason_code}
+              <div className="modal-body">
+                <div className="modal-form">
+                  <div className="form-field">
+                    <label htmlFor="ev-calendar">Calendar</label>
+                    <select
+                      id="ev-calendar"
+                      value={form.calendar_id}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, calendar_id: e.target.value }))
+                      }
+                      required
+                    >
+                      <option value="">Select a calendar…</option>
+                      {calendars.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-field">
+                    <label htmlFor="ev-title">Title</label>
+                    <input
+                      id="ev-title"
+                      type="text"
+                      placeholder="Event title"
+                      value={form.title}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, title: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>Start date + time</label>
+                      <div className="date-time">
+                        <input
+                          type="date"
+                          aria-label="Start date"
+                          value={form.start_date}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              start_date: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                        <input
+                          type="time"
+                          aria-label="Start time"
+                          value={form.start_time}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              start_time: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-field">
+                      <label>End date + time</label>
+                      <div className="date-time">
+                        <input
+                          type="date"
+                          aria-label="End date"
+                          value={form.end_date}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, end_date: e.target.value }))
+                          }
+                          required
+                        />
+                        <input
+                          type="time"
+                          aria-label="End time"
+                          value={form.end_time}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, end_time: e.target.value }))
+                          }
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label htmlFor="ev-category">Category</label>
+                      <input
+                        id="ev-category"
+                        type="text"
+                        placeholder="e.g. Study, Work"
+                        value={form.category}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, category: e.target.value }))
+                        }
+                      />
+                    </div>
+
+                    <div className="form-field">
+                      <label htmlFor="ev-priority">Priority</label>
+                      <select
+                        id="ev-priority"
+                        value={form.priority}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, priority: e.target.value }))
+                        }
+                      >
+                        <option value="">—</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-field">
+                    <label htmlFor="ev-location">Location</label>
+                    <input
+                      id="ev-location"
+                      type="text"
+                      placeholder="Add location or link"
+                      value={form.location}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, location: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                  <div className="form-field">
+                    <label htmlFor="ev-description">Description / notes</label>
+                    <textarea
+                      id="ev-description"
+                      rows={3}
+                      placeholder="Add notes, agenda, or any additional details…"
+                      value={form.description}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, description: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                  {formConflicts.length > 0 && (
+                    <div className="modal-info danger" role="alert">
+                      <span className="modal-info-icon" aria-hidden>
+                        !
                       </span>
-                      {" — "}
-                      {c.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <strong>This time does not work</strong>
+                        <ul style={{ margin: "0.35rem 0 0 1rem", padding: 0 }}>
+                          {formConflicts.map((c, i) => (
+                            <li key={i}>{c.message}</li>
+                          ))}
+                        </ul>
+                        <div style={{ marginTop: "0.6rem" }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={loadFormReplacementOptions}
+                            disabled={formOptionsLoading}
+                          >
+                            {formOptionsLoading
+                              ? "Loading replacement options…"
+                              : "Find replacement times"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-            <div className="form-actions full">
-              <button type="submit" className="primary" disabled={submitting}>
-                {submitting
-                  ? "Saving…"
-                  : editingId != null
-                  ? "Update event"
-                  : "Create event"}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={cancelForm}
-                disabled={submitting}
-              >
-                Cancel
-              </button>
+                  {formOptionsError && (
+                    <div className="modal-info danger" role="alert">
+                      <span className="modal-info-icon" aria-hidden>
+                        !
+                      </span>
+                      <span>
+                        Could not load replacement options. {formOptionsError}
+                      </span>
+                    </div>
+                  )}
+
+                  {formOptions !== null && !formOptionsLoading && (
+                    <div className="modal-info muted" aria-live="polite">
+                      <span className="modal-info-icon" aria-hidden>
+                        ⓘ
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <strong>Replacement options</strong>
+                        {formOptions.length === 0 ? (
+                          <p style={{ margin: "0.4rem 0 0" }}>
+                            No replacement options found in the next two weeks.
+                          </p>
+                        ) : (
+                          <ul className="replacement-options">
+                            {formOptions.map((opt) => (
+                              <li
+                                key={`${opt.rank}-${opt.start_time}`}
+                                className="replacement-option"
+                              >
+                                <div className="replacement-option-text">
+                                  <div className="replacement-option-when">
+                                    {formatLongDate(opt.start_time)}
+                                    {" · "}
+                                    {formatTimeRange(
+                                      opt.start_time,
+                                      opt.end_time
+                                    )}
+                                  </div>
+                                  {opt.explanation && (
+                                    <div className="replacement-option-why">
+                                      {opt.explanation}
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  onClick={() => chooseOptionInForm(opt)}
+                                >
+                                  Use this time
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {formError && formConflicts.length === 0 && (
+                    <div className="modal-info danger" role="alert">
+                      <span className="modal-info-icon" aria-hidden>
+                        !
+                      </span>
+                      <span>{formError}</span>
+                    </div>
+                  )}
+
+                  {!formError &&
+                    formConflicts.length === 0 &&
+                    formOptions === null &&
+                    !formOptionsError && (
+                      <div className="modal-info muted" aria-live="polite">
+                        <span className="modal-info-icon" aria-hidden>
+                          ⓘ
+                        </span>
+                        <span>
+                          Conflicts and scheduling suggestions will appear here.
+                        </span>
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={cancelForm}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="primary" disabled={submitting}>
+                  {submitting ? "Saving…" : "Save Event"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Event Details modal */}
+      {detailsEvent && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-details-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeDetails();
+          }}
+        >
+          <div className="modal-card">
+            <div className="modal-form-wrapper">
+              <div className="modal-header">
+                <h2 id="event-details-title" className="modal-title">
+                  {detailsView === "options"
+                    ? "Replacement options"
+                    : detailsEvent.title}
+                </h2>
+                <p className="modal-subtitle">
+                  {detailsView === "options"
+                    ? "Pick a new time to populate the edit form."
+                    : `${formatLongDate(detailsEvent.start_time)} · ${formatTimeRange(
+                        detailsEvent.start_time,
+                        detailsEvent.end_time
+                      )}`}
+                </p>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={closeDetails}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body">
+                {detailsView === "details" ? (
+                  <div className="details-grid">
+                    {(() => {
+                      const cal = calendarsById.get(detailsEvent.calendar_id);
+                      const items: { label: string; value: string }[] = [];
+                      if (cal) items.push({ label: "Calendar", value: cal.name });
+                      if (detailsEvent.category)
+                        items.push({ label: "Category", value: detailsEvent.category });
+                      if (detailsEvent.priority)
+                        items.push({ label: "Priority", value: detailsEvent.priority });
+                      if (detailsEvent.location)
+                        items.push({ label: "Location", value: detailsEvent.location });
+                      return items.map((it) => (
+                        <div key={it.label} className="details-row">
+                          <span className="details-label">{it.label}</span>
+                          <span className="details-value">{it.value}</span>
+                        </div>
+                      ));
+                    })()}
+                    {detailsEvent.description && (
+                      <div className="details-row details-row-block">
+                        <span className="details-label">Description</span>
+                        <p className="details-value details-description">
+                          {detailsEvent.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="modal-form">
+                    <div className="modal-info muted">
+                      <span className="modal-info-icon" aria-hidden>
+                        ⓘ
+                      </span>
+                      <span>
+                        Original time: {formatLongDate(detailsEvent.start_time)}
+                        {" · "}
+                        {formatTimeRange(
+                          detailsEvent.start_time,
+                          detailsEvent.end_time
+                        )}
+                      </span>
+                    </div>
+
+                    {detailsOptionsLoading && (
+                      <p className="muted small" style={{ margin: 0 }}>
+                        Loading replacement options…
+                      </p>
+                    )}
+
+                    {detailsOptionsError && (
+                      <div className="modal-info danger" role="alert">
+                        <span className="modal-info-icon" aria-hidden>
+                          !
+                        </span>
+                        <span>
+                          Could not load replacement options.{" "}
+                          {detailsOptionsError}
+                        </span>
+                      </div>
+                    )}
+
+                    {detailsOptions !== null &&
+                      !detailsOptionsLoading &&
+                      detailsOptions.length === 0 && (
+                        <div className="modal-info muted">
+                          <span className="modal-info-icon" aria-hidden>
+                            ⓘ
+                          </span>
+                          <span>
+                            No replacement options found in the next two weeks.
+                          </span>
+                        </div>
+                      )}
+
+                    {detailsOptions !== null && detailsOptions.length > 0 && (
+                      <ul className="replacement-options">
+                        {detailsOptions.map((opt) => (
+                          <li
+                            key={`${opt.rank}-${opt.start_time}`}
+                            className="replacement-option"
+                          >
+                            <div className="replacement-option-text">
+                              <div className="replacement-option-when">
+                                {formatLongDate(opt.start_time)}
+                                {" · "}
+                                {formatTimeRange(opt.start_time, opt.end_time)}
+                              </div>
+                              {opt.explanation && (
+                                <div className="replacement-option-why">
+                                  {opt.explanation}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => chooseOptionFromDetails(opt)}
+                            >
+                              Use this time
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                {detailsView === "options" ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setDetailsView("details");
+                      setDetailsOptions(null);
+                      setDetailsOptionsError(null);
+                    }}
+                  >
+                    Back
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={deleteFromDetails}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={loadDetailsOptions}
+                    >
+                      Find another time
+                    </button>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={editFromDetails}
+                    >
+                      Edit Event
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -1174,7 +1797,7 @@ export default function SchedulePage() {
                           <button
                             type="button"
                             className="cal-event-body"
-                            onClick={() => startEdit(ev)}
+                            onClick={() => openDetails(ev)}
                             title={`${ev.title} — ${formatTimeRange(
                               ev.start_time,
                               ev.end_time

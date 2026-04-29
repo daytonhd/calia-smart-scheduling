@@ -123,3 +123,47 @@ export interface WeeklyMetrics {
   busiest_day: string | null; // ISO date or null
   busiest_day_minutes: number;
 }
+
+// ----- Reschedule options (POST /schedule/reschedule-options) -----
+
+export interface RescheduleOptionsRequest {
+  event_id: number;
+  search_start: string; // naive ISO datetime
+  search_end: string;   // naive ISO datetime
+  max_results?: number;
+}
+
+export interface RescheduleOption {
+  rank: number;
+  start_time: string; // naive ISO datetime
+  end_time: string;   // naive ISO datetime
+  reason_code: string;
+  explanation: string;
+  minutes_from_original_start: number;
+}
+
+export interface RescheduleOptionsResponse {
+  event_id: number;
+  event_title: string;
+  duration_minutes: number;
+  options: RescheduleOption[];
+}
+
+// ----- Replacement options for a brand-new (unsaved) proposed event -----
+// (POST /schedule/proposed-reschedule-options)
+
+export interface ProposedRescheduleOptionsRequest {
+  calendar_id: number;
+  title: string;
+  start_time: string;   // naive ISO datetime
+  end_time: string;     // naive ISO datetime
+  search_start: string; // naive ISO datetime
+  search_end: string;   // naive ISO datetime
+  max_results?: number;
+}
+
+export interface ProposedRescheduleOptionsResponse {
+  event_title: string;
+  duration_minutes: number;
+  options: RescheduleOption[];
+}

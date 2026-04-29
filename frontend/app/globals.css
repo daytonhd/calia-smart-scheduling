@@ -980,20 +980,33 @@ button:disabled {
 }
 
 @keyframes modal-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes modal-pop-in {
-  from { opacity: 0; transform: translateY(6px) scale(0.985); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .modal-header {
   position: relative;
   flex: 0 0 auto;
   padding: 1.1rem 1.5rem 0.5rem;
-  padding-right: 3rem; /* leave room for the close button */
+  padding-right: 3rem;
+  /* leave room for the close button */
 }
 
 .modal-title {
@@ -1069,7 +1082,7 @@ button:disabled {
   min-width: 0;
 }
 
-.modal-form .form-field > label {
+.modal-form .form-field>label {
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--fg-soft);
@@ -1147,6 +1160,94 @@ button:disabled {
   .modal-form .form-row {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ---------- Replacement options list ---------- */
+
+.replacement-options {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.replacement-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.replacement-option-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.replacement-option-when {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.replacement-option-why {
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Event Details modal ---------- */
+
+.details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.details-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.details-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.details-row-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.details-label {
+  flex: 0 0 auto;
+  min-width: 6rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.details-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.details-description {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 /* ---------- Weekly calendar time grid ---------- */

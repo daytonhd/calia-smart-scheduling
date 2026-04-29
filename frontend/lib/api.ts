@@ -15,6 +15,10 @@ import type {
   Event,
   EventCreate,
   EventUpdate,
+  ProposedRescheduleOptionsRequest,
+  ProposedRescheduleOptionsResponse,
+  RescheduleOptionsRequest,
+  RescheduleOptionsResponse,
   ScheduleSummary,
   WeeklyMetrics,
 } from "./types";
@@ -226,6 +230,31 @@ export function deleteEvent(id: number): Promise<void> {
 
 export function getWeeklyMetrics(): Promise<WeeklyMetrics> {
   return request<WeeklyMetrics>("/schedule/metrics");
+}
+
+// ----- Replacement time options for an existing event -----
+
+export function getRescheduleOptions(
+  body: RescheduleOptionsRequest
+): Promise<RescheduleOptionsResponse> {
+  return request<RescheduleOptionsResponse>("/schedule/reschedule-options", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// ----- Replacement time options for a brand-new (unsaved) proposed event -----
+
+export function getProposedRescheduleOptions(
+  body: ProposedRescheduleOptionsRequest
+): Promise<ProposedRescheduleOptionsResponse> {
+  return request<ProposedRescheduleOptionsResponse>(
+    "/schedule/proposed-reschedule-options",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 // ----- Saved weekly AI summary -----
