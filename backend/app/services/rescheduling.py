@@ -31,42 +31,22 @@ MAX_RESULTS_HARD_CAP = 50
 _INTERNAL_SCAN_LIMIT = 200
 
 
-def find_replacement_slots(
-    event_id: int,
+def _rank_replacement_options(
+    *,
+    duration_minutes: int,
+    original_start: datetime,
     search_start: datetime,
     search_end: datetime,
     max_results: int,
     session: Session,
-) -> Optional[dict]:
-    """Return ranked replacement options for one event.
+    exclude_event_id: Optional[int],
+) -> List[dict]:
+    """Shared core: scan candidate slots and rank them.
 
-    Args:
-        event_id:      Existing event id to reschedule.
-        search_start:  Inclusive lower bound on candidate start time (naive).
-        search_end:    Exclusive upper bound on candidate end time (naive).
-        max_results:   Maximum number of options to return (clamped to
-                       MAX_RESULTS_HARD_CAP, must be >= 1).
-        session:       Active database session.
-
-    Returns:
-        dict matching RescheduleOptionsResponse, or None if the event does
-        not exist (callers should translate None to a 404).
+    Caller is responsible for any 404/validation concerns and for clamping
+    max_results before invoking this helper.
     """
-    if max_results < 1:
-        max_results = 1
-    if max_results > MAX_RESULTS_HARD_CAP:
-        max_results = MAX_RESULTS_HARD_CAP
-
-    event = session.get(Event, event_id)
-    if event is None:
-        return None
-
-    duration = event.end_time - event.start_time
-    duration_minutes = int(duration.total_seconds() // 60)
-    original_start = event.start_time
     original_date = original_start.date()
-
-    # Scan the inclusive day range covering [search_start, search_end].
     scan_start_date = search_start.date()
     scan_end_date = search_end.date()
 
@@ -76,7 +56,7 @@ def find_replacement_slots(
         end_date=scan_end_date,
         max_results=_INTERNAL_SCAN_LIMIT,
         session=session,
-        exclude_event_id=event_id,
+        exclude_event_id=exclude_event_id,
     )
 
     # Filter to the requested datetime window. find_available_slots returns
@@ -117,9 +97,110 @@ def find_replacement_slots(
             "minutes_from_original_start": delta_min,
         })
 
+    return options
+
+
+def find_replacement_slots(
+    event_id: int,
+    search_start: datetime,
+    search_end: datetime,
+    max_results: int,
+    session: Session,
+) -> Optional[dict]:
+    """Return ranked replacement options for one event.
+
+    Args:
+        event_id:      Existing event id to reschedule.
+        search_start:  Inclusive lower bound on candidate start time (naive).
+        search_end:    Exclusive upper bound on candidate end time (naive).
+        max_results:   Maximum number of options to return (clamped to
+                       MAX_RESULTS_HARD_CAP, must be >= 1).
+        session:       Active database session.
+
+    Returns:
+        dict matching RescheduleOptionsResponse, or None if the event does
+        not exist (callers should translate None to a 404).
+    """
+    if max_results < 1:
+        max_results = 1
+    if max_results > MAX_RESULTS_HARD_CAP:
+        max_results = MAX_RESULTS_HARD_CAP
+
+    event = session.get(Event, event_id)
+    if event is None:
+        return None
+
+    duration = event.end_time - event.start_time
+    duration_minutes = int(duration.total_seconds() // 60)
+
+    options = _rank_replacement_options(
+        duration_minutes=duration_minutes,
+        original_start=event.start_time,
+        search_start=search_start,
+        search_end=search_end,
+        max_results=max_results,
+        session=session,
+        exclude_event_id=event_id,
+    )
+
     return {
         "event_id": event.id,
         "event_title": event.title,
+        "duration_minutes": duration_minutes,
+        "options": options,
+    }
+
+
+def find_replacement_slots_for_proposed(
+    title: str,
+    start_time: datetime,
+    end_time: datetime,
+    search_start: datetime,
+    search_end: datetime,
+    max_results: int,
+    session: Session,
+) -> dict:
+    """Return ranked replacement options for an unsaved proposed event.
+
+    Mirrors find_replacement_slots but does not require an event_id — the
+    proposed event is not stored, so there is nothing to exclude from the
+    overlap check. Caller validates calendar_id and time-range invariants
+    before calling.
+
+    Args:
+        title:         Proposed event title (echoed back in the response).
+        start_time:    Original proposed start (naive).
+        end_time:      Original proposed end (naive). Defines the duration
+                       that every returned option preserves.
+        search_start:  Inclusive lower bound on candidate start time (naive).
+        search_end:    Exclusive upper bound on candidate end time (naive).
+        max_results:   Maximum number of options to return (clamped to
+                       MAX_RESULTS_HARD_CAP, must be >= 1).
+        session:       Active database session.
+
+    Returns:
+        dict matching ProposedRescheduleOptionsResponse.
+    """
+    if max_results < 1:
+        max_results = 1
+    if max_results > MAX_RESULTS_HARD_CAP:
+        max_results = MAX_RESULTS_HARD_CAP
+
+    duration = end_time - start_time
+    duration_minutes = int(duration.total_seconds() // 60)
+
+    options = _rank_replacement_options(
+        duration_minutes=duration_minutes,
+        original_start=start_time,
+        search_start=search_start,
+        search_end=search_end,
+        max_results=max_results,
+        session=session,
+        exclude_event_id=None,
+    )
+
+    return {
+        "event_title": title,
         "duration_minutes": duration_minutes,
         "options": options,
     }

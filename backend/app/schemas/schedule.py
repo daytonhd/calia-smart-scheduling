@@ -209,3 +209,51 @@ class RescheduleOptionsResponse(SQLModel):
     event_title: str
     duration_minutes: int
     options: List[RescheduleOption]
+
+
+class ProposedRescheduleOptionsRequest(SQLModel):
+    """Request body for POST /schedule/proposed-reschedule-options.
+
+    Used when the user is composing an event that has not been saved yet —
+    typically because the initial create attempt produced a 409 conflict.
+    Unlike RescheduleOptionsRequest, no event_id is required since there is
+    no stored row to exclude from the overlap check.
+    """
+
+    calendar_id: int
+    title: str
+    start_time: datetime
+    end_time: datetime
+    search_start: datetime
+    search_end: datetime
+    max_results: int = 5
+
+    @field_validator("start_time", "end_time", "search_start", "search_end")
+    @classmethod
+    def _naive_only(cls, v: datetime) -> datetime:
+        return ensure_naive_datetime(
+            v, "start_time/end_time/search_start/search_end"
+        )
+
+    @model_validator(mode="after")
+    def validate_fields(self):
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be before end_time")
+        if self.search_start >= self.search_end:
+            raise ValueError("search_start must be before search_end")
+        if self.max_results < 1:
+            raise ValueError("max_results must be at least 1")
+        return self
+
+
+class ProposedRescheduleOptionsResponse(SQLModel):
+    """Response for POST /schedule/proposed-reschedule-options.
+
+    Note: there is no event_id field — the proposed event has not been saved.
+    Each option reuses the existing RescheduleOption shape so frontend code
+    can render saved and proposed reschedule options with the same component.
+    """
+
+    event_title: str
+    duration_minutes: int
+    options: List[RescheduleOption]

@@ -7,10 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app.models.calendar import Calendar
 from app.models.schedule_summary import ScheduleSummary
 from app.schemas.schedule import (
     ConflictCheckRequest,
     ConflictCheckResponse,
+    ProposedRescheduleOptionsRequest,
+    ProposedRescheduleOptionsResponse,
     RescheduleOptionsRequest,
     RescheduleOptionsResponse,
     ScheduleSummaryRead,
@@ -21,7 +24,10 @@ from app.schemas.schedule import (
 )
 from app.services.conflict_detection import MVP_USER_ID, check_all_conflicts, find_available_slots
 from app.services.metrics import compute_weekly_metrics, monday_of
-from app.services.rescheduling import find_replacement_slots
+from app.services.rescheduling import (
+    find_replacement_slots,
+    find_replacement_slots_for_proposed,
+)
 from app.services.triage import compute_weekly_triage
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
@@ -116,6 +122,37 @@ def reschedule_options(
     if result is None:
         raise HTTPException(status_code=404, detail="Event not found")
     return result
+
+
+@router.post(
+    "/proposed-reschedule-options",
+    response_model=ProposedRescheduleOptionsResponse,
+)
+def proposed_reschedule_options(
+    body: ProposedRescheduleOptionsRequest,
+    session: Session = Depends(get_session),
+):
+    """Return ranked replacement slots for an unsaved proposed event.
+
+    Mirrors POST /schedule/reschedule-options but for an event that has not
+    been saved yet (typically because the initial create attempt produced a
+    409 conflict). The proposed event is NOT persisted — callers receive
+    candidate options only and must still issue a POST /events/ to save.
+
+    Returns 404 when calendar_id does not reference an existing calendar.
+    """
+    if not session.get(Calendar, body.calendar_id):
+        raise HTTPException(status_code=404, detail="Calendar not found")
+
+    return find_replacement_slots_for_proposed(
+        title=body.title,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        search_start=body.search_start,
+        search_end=body.search_end,
+        max_results=body.max_results,
+        session=session,
+    )
 
 
 @router.get("/triage", response_model=TriageResponse)
