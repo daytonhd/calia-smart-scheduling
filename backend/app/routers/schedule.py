@@ -40,8 +40,10 @@ def check_conflict(
 ):
     """Check whether a proposed event placement has any scheduling conflicts.
 
-    Returns all detected conflicts (event overlap, blocked time overlap, outside
-    availability). An empty conflicts list means the placement is clean.
+    Returns all detected conflicts. Active conflict types are event overlap
+    and blocked-time overlap. Placements outside AvailabilityWindow rows or
+    outside Daily Rhythm hours are NOT flagged here. An empty conflicts list
+    means the placement is clean.
     """
     conflicts = check_all_conflicts(
         start_time=body.start_time,

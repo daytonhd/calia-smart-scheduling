@@ -74,26 +74,24 @@ def test_blocked_time_detail_has_blocked_id_and_human_message(session):
     assert "3:00 PM" in blocked_conflict.message
 
 
-def test_outside_availability_detail_uses_weekday_name(session):
-    # Thursday 2026-04-23 (weekday=3) — no availability configured at all.
+def test_outside_availability_is_no_longer_returned(session):
+    """OUTSIDE_AVAILABILITY must not appear for a placement on a weekday
+    that has no availability row — that scenario is now allowed."""
     conflicts = check_all_conflicts(
         start_time=datetime(2026, 4, 23, 10, 0),
         end_time=datetime(2026, 4, 23, 11, 0),
         session=session,
     )
 
-    avail = next(c for c in conflicts if c.reason_code == "OUTSIDE_AVAILABILITY")
-    assert avail.conflict_type == "availability"
-    assert avail.related_event_id is None
-    assert avail.related_blocked_time_id is None
-    assert avail.start_time == datetime(2026, 4, 23, 10, 0)
-    assert avail.end_time == datetime(2026, 4, 23, 11, 0)
-    assert "Thursday" in avail.message
+    assert conflicts == []
 
 
-def test_returns_all_conflicts_not_just_first(session):
-    """A single proposed time can trigger event + blocked + availability all at once."""
-    # No availability for Monday → OUTSIDE_AVAILABILITY fires.
+def test_returns_all_active_conflicts_not_just_first(session):
+    """A single proposed time can trigger event + blocked overlaps together.
+
+    OUTSIDE_AVAILABILITY is no longer an active conflict, so the active
+    surface is event + blocked-time overlap only.
+    """
     cal = make_calendar(session)
     ev = make_event(
         session,
@@ -114,12 +112,8 @@ def test_returns_all_conflicts_not_just_first(session):
     )
 
     codes = sorted({c.reason_code for c in conflicts})
-    assert codes == [
-        "BLOCKED_TIME_OVERLAP",
-        "EVENT_OVERLAP",
-        "OUTSIDE_AVAILABILITY",
-    ]
-    # related ids are wired to the right rows
+    assert codes == ["BLOCKED_TIME_OVERLAP", "EVENT_OVERLAP"]
+    assert "OUTSIDE_AVAILABILITY" not in codes
     event_conflict = next(c for c in conflicts if c.reason_code == "EVENT_OVERLAP")
     blocked_conflict = next(
         c for c in conflicts if c.reason_code == "BLOCKED_TIME_OVERLAP"

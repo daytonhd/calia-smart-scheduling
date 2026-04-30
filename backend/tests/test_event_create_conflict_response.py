@@ -27,10 +27,12 @@ from app.schemas.event import EventCreate, EventUpdate
 from .factories import make_availability, make_calendar, make_event
 
 
-def test_create_event_outside_availability_returns_serializable_409(session):
-    """Conflicting create raises 409 whose detail is JSON-serializable."""
+def test_create_event_outside_availability_now_succeeds(session):
+    """Events outside AvailabilityWindow rows are no longer rejected — a
+    valid late-night create with no overlap should succeed."""
     cal = make_calendar(session)
-    # Monday 9:00-17:00 availability so a 22:00 slot falls outside it.
+    # Narrow availability window — the 22:00-23:00 placement falls outside it,
+    # but availability is no longer enforced.
     make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
 
     body = EventCreate(
@@ -40,27 +42,11 @@ def test_create_event_outside_availability_returns_serializable_409(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
-        create_event(body, session)
+    event = create_event(body, session)
 
-    assert exc_info.value.status_code == 409
-
-    # The bug surfaced as TypeError when FastAPI tried to json.dumps the
-    # detail. Reproduce that here — it must not raise.
-    rendered = json.dumps(exc_info.value.detail)
-    payload = json.loads(rendered)
-
-    conflicts = payload["conflicts"]
-    assert len(conflicts) >= 1
-
-    availability = next(
-        c for c in conflicts if c["reason_code"] == "OUTSIDE_AVAILABILITY"
-    )
-    assert isinstance(availability["start_time"], str)
-    assert isinstance(availability["end_time"], str)
-    assert availability["start_time"] == "2026-04-20T22:00:00"
-    assert availability["end_time"] == "2026-04-20T23:00:00"
-    assert availability["conflict_type"] == "availability"
+    assert event.id is not None
+    assert event.start_time == datetime(2026, 4, 20, 22, 0)
+    assert event.end_time == datetime(2026, 4, 20, 23, 0)
 
 
 def test_create_event_overlap_returns_serializable_409(session):

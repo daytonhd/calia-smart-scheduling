@@ -37,14 +37,17 @@ class ConflictCheckRequest(SQLModel):
 class ConflictDetail(SQLModel):
     """A single detected conflict.
 
-    reason_code is a stable machine identifier (EVENT_OVERLAP,
-    BLOCKED_TIME_OVERLAP, OUTSIDE_AVAILABILITY, INVALID_TIME_RANGE).
+    reason_code is a stable machine identifier. Active codes are
+    EVENT_OVERLAP and BLOCKED_TIME_OVERLAP; INVALID_TIME_RANGE may be
+    surfaced from input validation. (OUTSIDE_AVAILABILITY is retained as a
+    schema constant for backward compatibility but is no longer returned
+    from active conflict checks.)
     message is a deterministic backend-formatted human-readable string.
     conflict_type is the high-level category ("event", "blocked_time",
-    "availability", "input").
+    "input").
     start_time / end_time identify the offending interval when applicable
     (the related event/blocked-time interval, or the proposed interval for
-    availability/input issues).
+    input issues).
     related_event_id / related_blocked_time_id link the conflict back to a
     specific stored row when applicable.
     """
@@ -85,16 +88,16 @@ class SuggestSlotsRequest(SQLModel):
 class SlotSuggestion(SQLModel):
     """A single available time slot.
 
-    reason_code is a stable identifier (EARLIEST_VALID_SLOT,
-    FITS_AVAILABILITY, AVOIDS_CONFLICTS). explanation is a deterministic
-    human-readable string describing why this slot was selected.
+    reason_code is a stable identifier (EARLIEST_VALID_SLOT). explanation
+    is a deterministic human-readable string describing why this slot was
+    selected.
     """
 
     start_time: datetime
     end_time: datetime
     reason_code: str = "EARLIEST_VALID_SLOT"
     explanation: str = (
-        "Selected because it fits inside an active availability window "
+        "Selected because it fits inside your daily suggestion hours "
         "and avoids existing events and blocked times."
     )
 

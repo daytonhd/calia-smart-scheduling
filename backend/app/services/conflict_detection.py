@@ -1,10 +1,14 @@
 """Conflict detection service — reusable logic for all scheduling conflict checks.
 
-Three conflict types are checked:
+Active conflict types:
   1. EVENT_OVERLAP         — proposed time overlaps an existing event
   2. BLOCKED_TIME_OVERLAP  — proposed time overlaps a blocked time entry
-  3. OUTSIDE_AVAILABILITY  — proposed time is not fully contained within any active
-                             availability window for that weekday
+
+OUTSIDE_AVAILABILITY is no longer an active conflict. Manual event create /
+update is allowed outside AvailabilityWindow rows and outside Daily Rhythm
+hours as long as the range is valid and does not overlap occupied time.
+The legacy _check_availability helper remains in the file as transitional
+internals but is not invoked from any active code path.
 
 Touching boundaries (end_a == start_b) are NOT considered overlap.
 
@@ -12,10 +16,8 @@ Time contract: all datetime arguments must be naive (see
 app.services.time_contract). Schemas reject tz-aware inputs at the API
 boundary, so service-level code can safely compare naive values directly.
 
-Free-window scans and slot suggestions are now driven by Daily Rhythm
-suggestion hours (see app.services.daily_rhythm). AvailabilityWindow rows
-are still consulted by the OUTSIDE_AVAILABILITY check used at event-creation
-time, but they no longer constrain free-window or slot-suggestion output.
+Free-window scans and slot suggestions are driven by Daily Rhythm
+suggestion hours (see app.services.daily_rhythm).
 """
 
 from datetime import date, datetime, timedelta
@@ -194,14 +196,24 @@ def check_all_conflicts(
     session: Session,
     exclude_event_id: Optional[int] = None,
 ) -> List[ConflictDetail]:
-    """Run all three conflict checks and return every detected conflict.
+    """Return every detected conflict for a proposed event placement.
+
+    Active checks:
+      1. EVENT_OVERLAP        — proposed time overlaps an existing event
+      2. BLOCKED_TIME_OVERLAP — proposed time overlaps a blocked-time row
+
+    OUTSIDE_AVAILABILITY is no longer an active conflict. Manual events
+    outside AvailabilityWindow rows or outside Daily Rhythm hours are
+    allowed as long as they have a valid range and do not overlap occupied
+    time. The legacy _check_availability helper is retained for now but is
+    not invoked here.
 
     Args:
         start_time:        Proposed event start (naive datetime).
         end_time:          Proposed event end (naive datetime).
         session:           Active database session.
-        exclude_event_id:  Event id to skip during overlap check (used on update
-                           so the event does not conflict with itself).
+        exclude_event_id:  Event id to skip during overlap check (used on
+                           update so the event does not conflict with itself).
 
     Returns:
         List of ConflictDetail — empty means no conflicts.
@@ -209,7 +221,6 @@ def check_all_conflicts(
     conflicts: List[ConflictDetail] = []
     conflicts.extend(_check_event_overlap(start_time, end_time, session, exclude_event_id))
     conflicts.extend(_check_blocked_time_overlap(start_time, end_time, session))
-    conflicts.extend(_check_availability(start_time, end_time, session))
     return conflicts
 
 
