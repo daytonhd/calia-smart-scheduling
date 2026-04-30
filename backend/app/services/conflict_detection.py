@@ -2,7 +2,12 @@
 
 Active conflict types:
   1. EVENT_OVERLAP         — proposed time overlaps an existing event
-  2. BLOCKED_TIME_OVERLAP  — proposed time overlaps a blocked time entry
+  2. BLOCKED_TIME_OVERLAP  — proposed time overlaps a transitional
+                             occupied-time record (legacy BlockedTime row)
+
+The product model is shifting toward representing all commitments as
+categorized events; the BLOCKED_TIME_OVERLAP path is retained internally
+during this transition and is not emphasized in user-facing wording.
 
 OUTSIDE_AVAILABILITY is no longer an active conflict. Manual event create /
 update is allowed outside AvailabilityWindow rows and outside Daily Rhythm
@@ -53,7 +58,7 @@ _WEEKDAY_NAMES = [
 _SLOT_REASON_CODE = "EARLIEST_VALID_SLOT"
 _SLOT_EXPLANATION = (
     "Selected because it fits inside your daily suggestion hours "
-    "and avoids existing events and blocked times."
+    "and avoids existing events and other occupied schedule items."
 )
 
 
@@ -121,7 +126,7 @@ def _check_blocked_time_overlap(
             reason_code="BLOCKED_TIME_OVERLAP",
             conflict_type="blocked_time",
             message=(
-                f"This time overlaps blocked time from "
+                f"This time overlaps an existing schedule item from "
                 f"{_format_clock(bt.start_time)} to {_format_clock(bt.end_time)}."
             ),
             start_time=bt.start_time,
@@ -271,7 +276,8 @@ def find_free_windows(
     Driven by Daily Rhythm suggestion hours — AvailabilityWindow rows are not
     consulted here. For each day in the range:
       1. Build the daily suggestion window (DEFAULT_SUGGESTIONS_START–_END).
-      2. Collect events and blocked times that overlap that window.
+      2. Collect existing events and other occupied schedule items
+         (transitional BlockedTime rows) that overlap that window.
       3. Subtract the union of occupied intervals and emit the remaining
          free sub-intervals.
 
@@ -338,7 +344,7 @@ def find_available_slots(
     30-minute increments. AvailabilityWindow rows are not consulted — the
     Daily Rhythm window is the single source of truth for which hours we
     suggest in. A candidate slot is valid when it does not overlap any
-    existing event or blocked time.
+    existing event or other occupied schedule item.
 
     Each returned slot includes a deterministic reason_code (EARLIEST_VALID_SLOT)
     and an explanation string. Ranking is simple: earliest valid slots first.

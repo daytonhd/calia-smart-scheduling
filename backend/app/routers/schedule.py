@@ -41,9 +41,10 @@ def check_conflict(
     """Check whether a proposed event placement has any scheduling conflicts.
 
     Returns all detected conflicts. Active conflict types are event overlap
-    and blocked-time overlap. Placements outside AvailabilityWindow rows or
-    outside Daily Rhythm hours are NOT flagged here. An empty conflicts list
-    means the placement is clean.
+    and overlap with other occupied schedule items (transitional
+    BlockedTime rows). Placements outside AvailabilityWindow rows or
+    outside Daily Rhythm hours are NOT flagged here. An empty conflicts
+    list means the placement is clean.
     """
     conflicts = check_all_conflicts(
         start_time=body.start_time,
@@ -66,8 +67,8 @@ def suggest_slots(
 
     Scans daily suggestion hours (8 AM–9 PM) in 30-minute increments over the
     given date range (defaults to the next 7 days). Returns earliest valid
-    slots first. A slot is valid when it has no event overlap and no
-    blocked-time overlap.
+    slots first. A slot is valid when it does not overlap an existing event
+    or any other occupied schedule item.
     """
     today = date.today()
     start = body.start_date or today
@@ -110,8 +111,9 @@ def reschedule_options(
 
     Candidate slots are scanned inside Daily Rhythm suggestion hours
     (8 AM–9 PM), preserve the event's duration, and avoid existing events
-    and blocked times. AvailabilityWindow rows are not consulted. The target
-    event is excluded from event-overlap checks. Does NOT modify the event.
+    and other occupied schedule items. AvailabilityWindow rows are not
+    consulted. The target event is excluded from event-overlap checks.
+    Does NOT modify the event.
 
     Returns 404 when event_id does not exist.
     """
@@ -141,10 +143,10 @@ def proposed_reschedule_options(
     been saved yet (typically because the initial create attempt produced a
     409 conflict). Candidate slots are scanned inside Daily Rhythm
     suggestion hours (8 AM–9 PM), preserve the duration derived from the
-    proposed start/end, and avoid existing events and blocked times.
-    AvailabilityWindow rows are not consulted. The proposed event is NOT
-    persisted — callers receive candidate options only and must still issue
-    a POST /events/ to save.
+    proposed start/end, and avoid existing events and other occupied
+    schedule items. AvailabilityWindow rows are not consulted. The
+    proposed event is NOT persisted — callers receive candidate options
+    only and must still issue a POST /events/ to save.
 
     Returns 404 when calendar_id does not reference an existing calendar.
     """
@@ -173,11 +175,14 @@ def weekly_triage(
     ),
     session: Session = Depends(get_session),
 ):
-    """Return per-day triage diagnostics for a 7-day window starting Monday.
+    """Return per-day Schedule Balance diagnostics for a 7-day window
+    starting Monday.
 
-    Detects overloaded days, fragmented days, weak buffer capacity, and the
-    longest free window per day. Uses existing events, blocked times, and
-    availability windows — no LLM, no new tables.
+    Surfaces overloaded days, fragmented days, weak buffer capacity, and
+    the longest free window per day. Free Capacity is bounded by Daily
+    Rhythm suggestion hours and computed by subtracting existing events
+    and other occupied schedule items. AvailabilityWindow rows are not
+    consulted — no LLM, no new tables.
     """
     anchor = week_start or date.today()
     ws = monday_of(anchor)

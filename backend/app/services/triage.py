@@ -1,12 +1,17 @@
-"""Weekly schedule triage — deterministic risk-pattern detection.
+"""Weekly Schedule Balance — deterministic per-day diagnostics.
 
-Given a target week, summarize per-day busy/free time and flag four MVP
-risk patterns: overloaded days, fragmented days, weak buffer capacity, and
+Given a target week, summarize per-day busy/free time and surface a few
+MVP signals: overloaded days, fragmented days, weak buffer capacity, and
 a per-day longest free window. No LLM is involved — all messages are
 formatted from named constants and computed facts.
 
-Backed by existing helpers (find_free_windows, the events/blocked-times
-tables, and the same naive-datetime contract used elsewhere).
+Free capacity is bounded by Daily Rhythm suggestion hours (see
+app.services.daily_rhythm) — AvailabilityWindow rows are not consulted.
+Free time is computed by subtracting existing events and other occupied
+schedule items (transitional BlockedTime rows) from the daily suggestion
+window. The endpoint URL and module names retain the historical "triage"
+label for compatibility, but user-facing wording uses Schedule Balance /
+Free Capacity / Daily Load language.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -72,7 +77,8 @@ def compute_weekly_triage(
     )
     week_start_dt = datetime.combine(week_start, time.min)
 
-    # Pull all events and blocked times that overlap the week, once.
+    # Pull all events and transitional occupied-time records (BlockedTime
+    # rows) that overlap the week, once.
     events = session.exec(
         select(Event).where(
             Event.start_time < week_end_exclusive_dt,
@@ -134,7 +140,7 @@ def compute_weekly_triage(
             warnings.append({
                 "reason_code": "OVERLOADED_DAY",
                 "message": (
-                    f"This day has {total_busy // 60} hours of scheduled or blocked time."
+                    f"This day has {total_busy // 60} hours of occupied time."
                 ),
             })
         if is_fragmented:

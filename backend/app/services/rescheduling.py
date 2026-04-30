@@ -2,8 +2,8 @@
 
 Replacement candidates are scanned inside Daily Rhythm suggestion hours
 (8 AM–9 PM by default) via find_available_slots. They preserve the source
-event's duration and avoid existing events and (transitionally) blocked
-times. AvailabilityWindow rows are not consulted. The selected event is
+event's duration and avoid existing events and other occupied schedule
+items. AvailabilityWindow rows are not consulted. The selected event is
 excluded from the event-overlap check so its current placement does not
 "conflict with itself".
 
@@ -95,7 +95,7 @@ def _rank_replacement_options(
             "explanation": (
                 "Selected because it preserves the event duration, fits "
                 "your daily suggestion hours, and avoids existing events "
-                "and blocked times."
+                "and other occupied schedule items."
             ),
             "minutes_from_original_start": delta_min,
         })
