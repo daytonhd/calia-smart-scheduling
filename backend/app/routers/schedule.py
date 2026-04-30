@@ -108,9 +108,10 @@ def reschedule_options(
 ):
     """Return ranked replacement slots for an existing event.
 
-    Reuses the standard scheduling rules (event overlap, blocked-time overlap,
-    availability containment, touching-boundary semantics) and excludes the
-    target event from event-overlap checks. Does NOT modify the event.
+    Candidate slots are scanned inside Daily Rhythm suggestion hours
+    (8 AM–9 PM), preserve the event's duration, and avoid existing events
+    and blocked times. AvailabilityWindow rows are not consulted. The target
+    event is excluded from event-overlap checks. Does NOT modify the event.
 
     Returns 404 when event_id does not exist.
     """
@@ -138,8 +139,12 @@ def proposed_reschedule_options(
 
     Mirrors POST /schedule/reschedule-options but for an event that has not
     been saved yet (typically because the initial create attempt produced a
-    409 conflict). The proposed event is NOT persisted — callers receive
-    candidate options only and must still issue a POST /events/ to save.
+    409 conflict). Candidate slots are scanned inside Daily Rhythm
+    suggestion hours (8 AM–9 PM), preserve the duration derived from the
+    proposed start/end, and avoid existing events and blocked times.
+    AvailabilityWindow rows are not consulted. The proposed event is NOT
+    persisted — callers receive candidate options only and must still issue
+    a POST /events/ to save.
 
     Returns 404 when calendar_id does not reference an existing calendar.
     """

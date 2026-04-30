@@ -1,9 +1,11 @@
 """Adaptive rescheduling — find replacement slots for one selected event.
 
-Reuses the existing scheduling rules (overlap with events, blocked-time
-overlap, availability containment, touching-boundary semantics) via
-find_available_slots. The selected event is excluded from the event-overlap
-check so its current placement does not "conflict with itself".
+Replacement candidates are scanned inside Daily Rhythm suggestion hours
+(8 AM–9 PM by default) via find_available_slots. They preserve the source
+event's duration and avoid existing events and (transitionally) blocked
+times. AvailabilityWindow rows are not consulted. The selected event is
+excluded from the event-overlap check so its current placement does not
+"conflict with itself".
 
 Ranking is simple and deterministic:
   1. Same-day replacement slots (same calendar date as the event's original
