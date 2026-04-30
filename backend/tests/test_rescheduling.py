@@ -139,10 +139,12 @@ def test_avoids_blocked_times(session):
                     and o["end_time"] > datetime(2026, 4, 20, 14, 0))
 
 
-def test_respects_availability_windows(session):
-    """Slots outside an active availability window must not appear."""
-    # Only 9-10 on Monday. Tuesday has no availability.
-    make_availability(session, weekday=0, start=time(9, 0), end=time(10, 0))
+def test_options_stay_within_daily_rhythm_hours(session):
+    """Slots outside Daily Rhythm suggestion hours must not appear."""
+    from app.services.daily_rhythm import (
+        DEFAULT_SUGGESTIONS_END,
+        DEFAULT_SUGGESTIONS_START,
+    )
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -158,10 +160,15 @@ def test_respects_availability_windows(session):
         session=session,
     )
 
-    # All options must lie within Monday 9:00-10:00.
     for o in result["options"]:
-        assert o["start_time"] >= datetime(2026, 4, 20, 9, 0)
-        assert o["end_time"] <= datetime(2026, 4, 20, 10, 0)
+        rhythm_start = datetime.combine(
+            o["start_time"].date(), DEFAULT_SUGGESTIONS_START
+        )
+        rhythm_end = datetime.combine(
+            o["start_time"].date(), DEFAULT_SUGGESTIONS_END
+        )
+        assert o["start_time"] >= rhythm_start
+        assert o["end_time"] <= rhythm_end
 
 
 def test_same_day_options_rank_first(session):

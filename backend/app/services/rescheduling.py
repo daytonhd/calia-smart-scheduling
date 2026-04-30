@@ -92,7 +92,8 @@ def _rank_replacement_options(
             "reason_code": reason_code,
             "explanation": (
                 "Selected because it preserves the event duration, fits "
-                "availability, and avoids existing events and blocked times."
+                "your daily suggestion hours, and avoids existing events "
+                "and blocked times."
             ),
             "minutes_from_original_start": delta_min,
         })

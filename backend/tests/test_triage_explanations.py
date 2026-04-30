@@ -71,11 +71,12 @@ def test_fragmented_day_warning_code_and_message(session):
 
 
 def test_weak_buffer_warning_code_and_message(session):
-    make_availability(session, weekday=1, start=time(9, 0), end=time(10, 0))
+    # Block 8:00-20:00 of Tuesday (12h) so only the 20:00-21:00 hour remains
+    # free inside the Daily Rhythm window — below the weak-buffer threshold.
     cal = make_calendar(session)
     make_event(session, cal.id,
-               start=datetime(2026, 4, 21, 9, 0),
-               end=datetime(2026, 4, 21, 9, 30))
+               start=datetime(2026, 4, 21, 8, 0),
+               end=datetime(2026, 4, 21, 20, 0))
 
     triage = compute_weekly_triage(session, week_start=MONDAY)
     tuesday = _day(triage, date(2026, 4, 21))
@@ -102,8 +103,9 @@ def test_longest_free_window_is_deterministic(session):
     assert a_lf == b_lf
 
     monday_a = _day(a, MONDAY)
-    # 9-17 minus 12:00-12:30 → free windows are 180 and 270 → longest 270.
-    assert monday_a["longest_free_window_minutes"] == 270
+    # Daily Rhythm 8:00-21:00 minus 12:00-12:30 → free windows of 240 and
+    # 510 minutes → longest 510.
+    assert monday_a["longest_free_window_minutes"] == 510
 
 
 def test_warning_messages_are_deterministic(session):

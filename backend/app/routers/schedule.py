@@ -62,10 +62,10 @@ def suggest_slots(
 ):
     """Return up to max_results conflict-free time slots of the requested duration.
 
-    Scans availability windows in 30-minute increments over the given date range
-    (defaults to the next 7 days). Returns earliest valid slots first.
-    A slot is valid when it has no event overlap, no blocked-time overlap, and is
-    fully contained within an active availability window.
+    Scans daily suggestion hours (8 AM–9 PM) in 30-minute increments over the
+    given date range (defaults to the next 7 days). Returns earliest valid
+    slots first. A slot is valid when it has no event overlap and no
+    blocked-time overlap.
     """
     today = date.today()
     start = body.start_date or today

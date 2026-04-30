@@ -34,7 +34,8 @@ def _day(triage, d: date):
 
 
 def test_empty_low_data_week_is_clean(session):
-    """No events, no blocked times, no availability → all days zeroed, no warnings."""
+    """No events / no blocked times → each day is fully free inside the
+    Daily Rhythm window (8:00–21:00 = 780 min) and there are no warnings."""
     triage = compute_weekly_triage(session, week_start=MONDAY)
 
     assert triage["week_start"] == MONDAY
@@ -44,14 +45,16 @@ def test_empty_low_data_week_is_clean(session):
         assert d["scheduled_minutes"] == 0
         assert d["blocked_minutes"] == 0
         assert d["total_busy_minutes"] == 0
-        assert d["free_minutes"] == 0
-        assert d["longest_free_window_minutes"] == 0
+        # 8:00–21:00 = 13h = 780 min of free time per day.
+        assert d["free_minutes"] == 780
+        assert d["longest_free_window_minutes"] == 780
         assert d["is_overloaded"] is False
         assert d["is_fragmented"] is False
         assert d["has_weak_buffer"] is False
         assert d["warnings"] == []
-    # No availability all week → no free time → weak weekly buffer fires.
-    assert any(w["reason_code"] == "WEAK_WEEKLY_BUFFER" for w in triage["week_warnings"])
+    # 7 * 780 = 5460 min of weekly free time — well above the weak-buffer
+    # threshold, so no week-level warnings.
+    assert triage["week_warnings"] == []
 
 
 def test_overloaded_day_detection(session):
@@ -126,13 +129,14 @@ def test_fragmented_day_detection(session):
 
 
 def test_weak_buffer_detection(session):
-    """Day with limited availability and most of it occupied → WEAK_BUFFER."""
-    # Tuesday only — 1 hour availability, 30 minutes free → < 90 minute threshold.
-    make_availability(session, weekday=1, start=time(9, 0), end=time(10, 0))
+    """Day where events/blocked times consume nearly the whole Daily Rhythm
+    window leaves <90 min free → WEAK_BUFFER."""
+    # Daily Rhythm is 8:00-21:00 (780 min). Block 8:00-20:00 (720 min) so
+    # only the 20:00-21:00 hour (60 min) remains free — below threshold.
     cal = make_calendar(session)
     make_event(session, cal.id,
-               start=datetime(2026, 4, 21, 9, 0),
-               end=datetime(2026, 4, 21, 9, 30))
+               start=datetime(2026, 4, 21, 8, 0),
+               end=datetime(2026, 4, 21, 20, 0))
 
     triage = compute_weekly_triage(session, week_start=MONDAY)
     tuesday = _day(triage, date(2026, 4, 21))
@@ -144,10 +148,9 @@ def test_weak_buffer_detection(session):
 
 def test_longest_free_window_calculation(session):
     """longest_free_window_minutes = max of per-day free window durations."""
-    _full_week_availability(session)
     cal = make_calendar(session)
-    # On Monday: split 9-17 (480 min) by 12:00-12:30 lunch.
-    # Free windows: 9:00-12:00 (180) and 12:30-17:00 (270). Longest = 270.
+    # Daily Rhythm 8:00-21:00 split by a 12:00-12:30 lunch event.
+    # Free windows: 8:00-12:00 (240) and 12:30-21:00 (510). Longest = 510.
     make_event(session, cal.id,
                start=datetime(2026, 4, 20, 12, 0),
                end=datetime(2026, 4, 20, 12, 30))
@@ -155,19 +158,17 @@ def test_longest_free_window_calculation(session):
     triage = compute_weekly_triage(session, week_start=MONDAY)
     monday = _day(triage, MONDAY)
 
-    assert monday["longest_free_window_minutes"] == 270
+    assert monday["longest_free_window_minutes"] == 510
 
 
-def test_day_without_availability_not_flagged_weak_buffer(session):
-    """Days with zero availability and zero events are not flagged as weak."""
-    # Only Tuesday gets availability; rest of week is intentionally off.
-    make_availability(session, weekday=1, start=time(9, 0), end=time(17, 0))
-
+def test_unscheduled_day_not_flagged_weak_buffer(session):
+    """A day with zero events/blocked times has the full Daily Rhythm
+    window free (780 min) — well above the weak-buffer threshold."""
     triage = compute_weekly_triage(session, week_start=MONDAY)
     monday = _day(triage, MONDAY)
 
-    assert monday["free_minutes"] == 0
-    # Monday has no availability and no events → not weak-buffer flagged.
+    # 13h * 60 = 780 min free (the full 8:00-21:00 window).
+    assert monday["free_minutes"] == 780
     assert monday["has_weak_buffer"] is False
 
 

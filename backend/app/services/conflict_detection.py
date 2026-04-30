@@ -11,9 +11,14 @@ Touching boundaries (end_a == start_b) are NOT considered overlap.
 Time contract: all datetime arguments must be naive (see
 app.services.time_contract). Schemas reject tz-aware inputs at the API
 boundary, so service-level code can safely compare naive values directly.
+
+Free-window scans and slot suggestions are now driven by Daily Rhythm
+suggestion hours (see app.services.daily_rhythm). AvailabilityWindow rows
+are still consulted by the OUTSIDE_AVAILABILITY check used at event-creation
+time, but they no longer constrain free-window or slot-suggestion output.
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, NamedTuple, Optional, Tuple
 
 from sqlmodel import Session, select
@@ -22,6 +27,7 @@ from app.models.availability_window import AvailabilityWindow
 from app.models.blocked_time import BlockedTime
 from app.models.event import Event
 from app.schemas.schedule import ConflictDetail, SlotSuggestion
+from app.services.daily_rhythm import get_suggestion_windows_for_range
 
 
 class FreeWindow(NamedTuple):
@@ -44,7 +50,7 @@ _WEEKDAY_NAMES = [
 # source of truth for deterministic backend-formatted text.
 _SLOT_REASON_CODE = "EARLIEST_VALID_SLOT"
 _SLOT_EXPLANATION = (
-    "Selected because it fits inside an active availability window "
+    "Selected because it fits inside your daily suggestion hours "
     "and avoids existing events and blocked times."
 )
 
@@ -251,52 +257,35 @@ def find_free_windows(
 ) -> List[FreeWindow]:
     """Return maximal free intervals across [start_date, end_date].
 
-    For each day:
-      1. Collect active availability windows for that weekday.
-      2. Collect events and blocked times that overlap the day.
-      3. For each availability window, subtract the union of occupied intervals
-         and emit the remaining free sub-intervals.
+    Driven by Daily Rhythm suggestion hours — AvailabilityWindow rows are not
+    consulted here. For each day in the range:
+      1. Build the daily suggestion window (DEFAULT_SUGGESTIONS_START–_END).
+      2. Collect events and blocked times that overlap that window.
+      3. Subtract the union of occupied intervals and emit the remaining
+         free sub-intervals.
 
-    This is a reusable lower-level helper — slot-fitting and triage logic layer
-    on top by walking the returned windows. It does not enforce any slot
-    duration or grid alignment; callers decide how to consume free intervals.
+    This is a reusable lower-level helper — slot-fitting and triage logic
+    layer on top by walking the returned windows. It does not enforce any
+    slot duration or grid alignment; callers decide how to consume the
+    returned intervals.
 
     Returns:
-        Free windows ordered earliest-first. Empty list if no availability
-        exists in the range.
+        Free windows ordered earliest-first.
     """
     results: List[FreeWindow] = []
-    current_date = start_date
 
-    while current_date <= end_date:
-        weekday = current_date.weekday()
-
-        windows = session.exec(
-            select(AvailabilityWindow).where(
-                AvailabilityWindow.user_id == MVP_USER_ID,
-                AvailabilityWindow.weekday == weekday,
-                AvailabilityWindow.active == True,  # noqa: E712
-            )
-        ).all()
-
-        if not windows:
-            current_date += timedelta(days=1)
-            continue
-
-        day_start = datetime.combine(current_date, time.min)
-        day_end = datetime.combine(current_date + timedelta(days=1), time.min)
-
+    for w_start, w_end in get_suggestion_windows_for_range(start_date, end_date):
         events = session.exec(
             select(Event).where(
-                Event.start_time < day_end,
-                Event.end_time > day_start,
+                Event.start_time < w_end,
+                Event.end_time > w_start,
             )
         ).all()
         blocked = session.exec(
             select(BlockedTime).where(
                 BlockedTime.user_id == MVP_USER_ID,
-                BlockedTime.start_time < day_end,
-                BlockedTime.end_time > day_start,
+                BlockedTime.start_time < w_end,
+                BlockedTime.end_time > w_start,
             )
         ).all()
 
@@ -304,15 +293,24 @@ def find_free_windows(
             (e.start_time, e.end_time) for e in events
         ] + [(bt.start_time, bt.end_time) for bt in blocked]
 
-        for window in windows:
-            w_start = datetime.combine(current_date, window.start_time)
-            w_end = datetime.combine(current_date, window.end_time)
-            for s, e in _subtract_intervals(w_start, w_end, occupied):
-                results.append(FreeWindow(start_time=s, end_time=e))
-
-        current_date += timedelta(days=1)
+        for s, e in _subtract_intervals(w_start, w_end, occupied):
+            results.append(FreeWindow(start_time=s, end_time=e))
 
     return results
+
+
+def _has_event_or_blocked_overlap(
+    start_time: datetime,
+    end_time: datetime,
+    session: Session,
+    exclude_event_id: Optional[int],
+) -> bool:
+    """Return True iff any event or blocked time overlaps [start_time, end_time)."""
+    if _check_event_overlap(start_time, end_time, session, exclude_event_id):
+        return True
+    if _check_blocked_time_overlap(start_time, end_time, session):
+        return True
+    return False
 
 
 def find_available_slots(
@@ -325,9 +323,11 @@ def find_available_slots(
 ) -> List[SlotSuggestion]:
     """Return up to max_results conflict-free slots of the requested duration.
 
-    Scans each day in [start_date, end_date] in order. For each day, iterates
-    through active availability windows for that weekday in 30-minute increments.
-    A candidate slot is valid when check_all_conflicts returns empty.
+    Scans each day's Daily Rhythm suggestion window (8 AM–9 PM by default) in
+    30-minute increments. AvailabilityWindow rows are not consulted — the
+    Daily Rhythm window is the single source of truth for which hours we
+    suggest in. A candidate slot is valid when it does not overlap any
+    existing event or blocked time.
 
     Each returned slot includes a deterministic reason_code (EARLIEST_VALID_SLOT)
     and an explanation string. Ranking is simple: earliest valid slots first.
@@ -339,6 +339,9 @@ def find_available_slots(
         end_date:          Last day to scan (inclusive).
         max_results:       Maximum number of slots to return.
         session:           Active database session.
+        exclude_event_id:  Event id to skip during overlap check (used by
+                           rescheduling so the target event does not block
+                           its own time).
 
     Returns:
         List of SlotSuggestion ordered earliest first. Empty if none found.
@@ -347,46 +350,31 @@ def find_available_slots(
     increment = timedelta(minutes=30)
     results: List[SlotSuggestion] = []
 
-    current_date = start_date
-    while current_date <= end_date and len(results) < max_results:
-        weekday = current_date.weekday()
+    for window_start, window_end in get_suggestion_windows_for_range(
+        start_date, end_date
+    ):
+        if len(results) >= max_results:
+            break
 
-        windows = session.exec(
-            select(AvailabilityWindow).where(
-                AvailabilityWindow.user_id == MVP_USER_ID,
-                AvailabilityWindow.weekday == weekday,
-                AvailabilityWindow.active == True,  # noqa: E712
-            )
-        ).all()
+        candidate_start = window_start
+        while candidate_start + slot_duration <= window_end:
+            candidate_end = candidate_start + slot_duration
 
-        for window in windows:
-            if len(results) >= max_results:
-                break
+            if not _has_event_or_blocked_overlap(
+                candidate_start,
+                candidate_end,
+                session,
+                exclude_event_id,
+            ):
+                results.append(SlotSuggestion(
+                    start_time=candidate_start,
+                    end_time=candidate_end,
+                    reason_code=_SLOT_REASON_CODE,
+                    explanation=_SLOT_EXPLANATION,
+                ))
+                if len(results) >= max_results:
+                    break
 
-            window_start = datetime.combine(current_date, window.start_time)
-            window_end = datetime.combine(current_date, window.end_time)
-            candidate_start = window_start
-
-            while candidate_start + slot_duration <= window_end:
-                candidate_end = candidate_start + slot_duration
-
-                if not check_all_conflicts(
-                    candidate_start,
-                    candidate_end,
-                    session,
-                    exclude_event_id=exclude_event_id,
-                ):
-                    results.append(SlotSuggestion(
-                        start_time=candidate_start,
-                        end_time=candidate_end,
-                        reason_code=_SLOT_REASON_CODE,
-                        explanation=_SLOT_EXPLANATION,
-                    ))
-                    if len(results) >= max_results:
-                        break
-
-                candidate_start += increment
-
-        current_date += timedelta(days=1)
+            candidate_start += increment
 
     return results

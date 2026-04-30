@@ -134,14 +134,17 @@ def test_excludes_blocked_times_from_proposed_suggestions(session):
                     and o["end_time"] > datetime(2026, 4, 20, 14, 0))
 
 
-def test_proposed_suggestions_stay_inside_availability(session):
-    # Only Monday 9-10 availability. Tuesday has none.
-    make_availability(session, weekday=0, start=time(9, 0), end=time(10, 0))
+def test_proposed_suggestions_stay_inside_daily_rhythm(session):
+    """Proposed-event replacement slots must fall inside Daily Rhythm hours."""
+    from app.services.daily_rhythm import (
+        DEFAULT_SUGGESTIONS_END,
+        DEFAULT_SUGGESTIONS_START,
+    )
 
     result = find_replacement_slots_for_proposed(
         title="Proposed",
-        start_time=datetime(2026, 4, 20, 11, 0),  # outside availability
-        end_time=datetime(2026, 4, 20, 12, 0),
+        start_time=datetime(2026, 4, 20, 23, 0),  # outside rhythm hours
+        end_time=datetime(2026, 4, 21, 0, 0),
         search_start=datetime(2026, 4, 20, 0, 0),
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=20,
@@ -149,8 +152,14 @@ def test_proposed_suggestions_stay_inside_availability(session):
     )
 
     for o in result["options"]:
-        assert o["start_time"] >= datetime(2026, 4, 20, 9, 0)
-        assert o["end_time"] <= datetime(2026, 4, 20, 10, 0)
+        rhythm_start = datetime.combine(
+            o["start_time"].date(), DEFAULT_SUGGESTIONS_START
+        )
+        rhythm_end = datetime.combine(
+            o["start_time"].date(), DEFAULT_SUGGESTIONS_END
+        )
+        assert o["start_time"] >= rhythm_start
+        assert o["end_time"] <= rhythm_end
 
 
 def test_max_results_respected_for_proposed(session):
