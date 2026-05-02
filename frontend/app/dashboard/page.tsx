@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ApiError,
+  getScheduleBalance,
   getWeeklyMetrics,
   getWeeklySummary,
   listBlockedTimes,
@@ -14,6 +15,8 @@ import type {
   BlockedTime,
   Calendar,
   Event,
+  ScheduleBalanceDay,
+  ScheduleBalanceResponse,
   ScheduleSummary,
   WeeklyMetrics,
 } from "@/lib/types";
@@ -82,12 +85,94 @@ function todayLabel(): string {
   });
 }
 
+// ----- Schedule Balance helpers -----
+
+// Daily Rhythm suggestion window upper bound used for visual scaling.
+// The shared bottom scale shows 0h, 4h, 8h.
+const BALANCE_SCALE_MAX_MIN = 8 * 60;
+
+// Day-level intensity bucket from total busy minutes.
+// Mirrors the OVERLOADED_DAY_BUSY_MINUTES threshold from the backend.
+type LoadLevel = "light" | "balanced" | "heavy";
+
+function loadLevel(busyMin: number): LoadLevel {
+  if (busyMin >= 6 * 60) return "heavy";
+  if (busyMin >= 3 * 60) return "balanced";
+  return "light";
+}
+
+function loadLevelLabel(level: LoadLevel): string {
+  if (level === "heavy") return "Heavy";
+  if (level === "balanced") return "Balanced";
+  return "Light";
+}
+
+function weekdayShort(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: "short" });
+}
+
+function weekdayLong(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: "long" });
+}
+
+interface BalanceStatus {
+  label: string;   // "Light" | "Balanced" | "Heavy" | "Slightly Heavy" | "Empty"
+  detail: string;  // compact interpretation
+}
+
+function computeBalanceStatus(days: ScheduleBalanceDay[]): BalanceStatus {
+  if (days.length === 0) {
+    return { label: "Empty", detail: "No schedule data for this week yet." };
+  }
+
+  const totalBusy = days.reduce((s, d) => s + d.total_busy_minutes, 0);
+  if (totalBusy === 0) {
+    return { label: "Light", detail: "Nothing scheduled this week yet." };
+  }
+
+  const avg = totalBusy / days.length;
+  const max = days.reduce(
+    (m, d) => (d.total_busy_minutes > m.total_busy_minutes ? d : m),
+    days[0]
+  );
+  const heavyDays = days.filter((d) => d.total_busy_minutes >= 6 * 60);
+
+  if (heavyDays.length >= 2) {
+    return {
+      label: "Heavy",
+      detail: "Multiple days are carrying significant scheduled load.",
+    };
+  }
+
+  if (max.total_busy_minutes >= 6 * 60 && max.total_busy_minutes > avg * 1.8) {
+    return {
+      label: "Slightly Heavy",
+      detail: `${weekdayLong(max.date)} is carrying most of this week's scheduled load.`,
+    };
+  }
+
+  if (avg < 2 * 60) {
+    return {
+      label: "Light",
+      detail: "Plenty of free room across the week.",
+    };
+  }
+
+  return {
+    label: "Balanced",
+    detail: "Load is spread evenly across the week.",
+  };
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [todayEvents, setTodayEvents] = useState<Event[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [todayBlocked, setTodayBlocked] = useState<BlockedTime[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
+  const [balance, setBalance] = useState<ScheduleBalanceResponse | null>(null);
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,12 +187,13 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [m, ev, up, bt, ws, cals] = await Promise.all([
+        const [m, ev, up, bt, ws, sb, cals] = await Promise.all([
           getWeeklyMetrics(),
           listEvents({ startTime: start, endTime: end }),
           listEvents({ startTime: upStart, endTime: upEnd }),
           listBlockedTimes({ startTime: start, endTime: end }),
           getWeeklySummary(),
+          getScheduleBalance(),
           listCalendars(),
         ]);
         if (cancelled) return;
@@ -129,6 +215,7 @@ export default function DashboardPage() {
         );
         setTodayBlocked(bt);
         setSummary(ws);
+        setBalance(sb);
         setCalendars(cals);
       } catch (e) {
         if (cancelled) return;
@@ -241,6 +328,143 @@ export default function DashboardPage() {
                       );
                     })}
                   </ul>
+                )}
+              </div>
+
+              {/* Schedule Balance */}
+              <div className="card balance-card">
+                <div className="card-header-row">
+                  <h3 className="card-title">Schedule Balance</h3>
+                  {balance && balance.days.length > 0 && (
+                    (() => {
+                      const status = computeBalanceStatus(balance.days);
+                      const cls =
+                        status.label === "Heavy"
+                          ? "heavy"
+                          : status.label === "Slightly Heavy"
+                          ? "slight-heavy"
+                          : status.label === "Light"
+                          ? "light"
+                          : "balanced";
+                      return (
+                        <span className={`pill balance-pill ${cls}`}>
+                          {status.label}
+                        </span>
+                      );
+                    })()
+                  )}
+                </div>
+
+                {!balance || balance.days.length === 0 ? (
+                  <div className="empty-state">
+                    <span className="empty-state-strong">
+                      No schedule data yet
+                    </span>
+                    Add events or blocked times to see how balanced your week
+                    is.
+                  </div>
+                ) : (
+                  (() => {
+                    const status = computeBalanceStatus(balance.days);
+                    const maxBusy = Math.max(
+                      1,
+                      ...balance.days.map((d) => d.total_busy_minutes)
+                    );
+                    return (
+                      <>
+                        <p className="balance-status">
+                          <span className="balance-status-label">
+                            {status.label}
+                          </span>
+                          <span className="balance-status-sep">—</span>
+                          <span className="balance-status-detail">
+                            {status.detail}
+                          </span>
+                        </p>
+
+                        <div className="balance-section">
+                          <div className="balance-section-title">
+                            Free Capacity
+                          </div>
+                          <div className="capacity-bars">
+                            {balance.days.map((d) => {
+                              const pct = Math.min(
+                                100,
+                                (d.free_minutes / BALANCE_SCALE_MAX_MIN) * 100
+                              );
+                              return (
+                                <div className="capacity-row" key={d.date}>
+                                  <div className="capacity-day">
+                                    {weekdayShort(d.date)}
+                                  </div>
+                                  <div className="capacity-track">
+                                    <div
+                                      className="capacity-fill"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <div className="capacity-scale">
+                              <span>0h</span>
+                              <span>4h</span>
+                              <span>8h</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="balance-section">
+                          <div className="balance-section-title">
+                            Daily Load
+                          </div>
+                          <div className="load-bars">
+                            {balance.days.map((d) => {
+                              const level = loadLevel(d.total_busy_minutes);
+                              const h = Math.min(
+                                100,
+                                (d.total_busy_minutes / maxBusy) * 100
+                              );
+                              return (
+                                <div className="load-col" key={d.date}>
+                                  <div className="load-bar-wrap">
+                                    <div
+                                      className={`load-bar load-${level}`}
+                                      style={{ height: `${h}%` }}
+                                      title={`${loadLevelLabel(level)} · ${Math.round(d.total_busy_minutes / 60 * 10) / 10}h`}
+                                    />
+                                  </div>
+                                  <div className="load-day">
+                                    {weekdayShort(d.date)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="load-legend">
+                            <span className="load-legend-item">
+                              <span className="load-swatch load-light" /> Light
+                            </span>
+                            <span className="load-legend-item">
+                              <span className="load-swatch load-balanced" />{" "}
+                              Balanced
+                            </span>
+                            <span className="load-legend-item">
+                              <span className="load-swatch load-heavy" /> Heavy
+                            </span>
+                          </div>
+                        </div>
+
+                        {balance.week_warnings.length > 0 && (
+                          <ul className="balance-notes">
+                            {balance.week_warnings.map((w) => (
+                              <li key={w.reason_code}>{w.message}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    );
+                  })()
                 )}
               </div>
             </div>

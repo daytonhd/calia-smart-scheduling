@@ -124,6 +124,36 @@ export interface WeeklyMetrics {
   busiest_day_minutes: number;
 }
 
+// ----- Schedule Balance (GET /schedule/triage internally) -----
+// User-facing wording: Schedule Balance / Free Capacity / Daily Load.
+// The internal endpoint name remains /schedule/triage during this transition;
+// these types map the diagnostics payload to the Schedule Balance UI.
+
+export interface ScheduleBalanceWarning {
+  reason_code: string;
+  message: string;
+}
+
+export interface ScheduleBalanceDay {
+  date: string; // ISO date
+  scheduled_minutes: number;
+  blocked_minutes: number;
+  total_busy_minutes: number;
+  free_minutes: number;
+  longest_free_window_minutes: number;
+  is_overloaded: boolean;
+  is_fragmented: boolean;
+  has_weak_buffer: boolean;
+  warnings: ScheduleBalanceWarning[];
+}
+
+export interface ScheduleBalanceResponse {
+  week_start: string; // ISO date
+  week_end: string;   // ISO date
+  days: ScheduleBalanceDay[];
+  week_warnings: ScheduleBalanceWarning[];
+}
+
 // ----- Reschedule options (POST /schedule/reschedule-options) -----
 
 export interface RescheduleOptionsRequest {

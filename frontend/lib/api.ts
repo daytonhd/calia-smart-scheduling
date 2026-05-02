@@ -19,6 +19,7 @@ import type {
   ProposedRescheduleOptionsResponse,
   RescheduleOptionsRequest,
   RescheduleOptionsResponse,
+  ScheduleBalanceResponse,
   ScheduleSummary,
   WeeklyMetrics,
 } from "./types";
@@ -255,6 +256,17 @@ export function getProposedRescheduleOptions(
       body: JSON.stringify(body),
     }
   );
+}
+
+// ----- Schedule Balance (per-day diagnostics for the dashboard) -----
+// Hits the existing /schedule/triage endpoint; the UI maps it to Schedule
+// Balance / Free Capacity / Daily Load wording.
+
+export function getScheduleBalance(
+  weekStart?: string
+): Promise<ScheduleBalanceResponse> {
+  const qs = weekStart ? `?week_start=${weekStart}` : "";
+  return request<ScheduleBalanceResponse>(`/schedule/triage${qs}`);
 }
 
 // ----- Saved weekly AI summary -----
