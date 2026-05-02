@@ -935,7 +935,7 @@ export default function SchedulePage() {
       <header className="page-header">
         <h2 className="page-title">Schedule</h2>
         <p className="page-subtitle">
-          Plan commitments, availability, and protected time.
+          Plan events, commitments, and protected time.
         </p>
       </header>
 
