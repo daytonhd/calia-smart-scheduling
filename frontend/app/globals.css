@@ -1847,6 +1847,40 @@ button:disabled {
   margin-top: 0.25rem;
 }
 
+/* ---------- Upcoming sidebar card ---------- */
+.upcoming-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.upcoming-today {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.upcoming-next {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.upcoming-link {
+  display: inline-block;
+  margin-top: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--accent-strong);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.upcoming-link:hover {
+  text-decoration: underline;
+}
+
 /* ---------- Daily Rhythm sidebar card ---------- */
 .rhythm-rows {
   display: flex;

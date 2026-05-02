@@ -5,20 +5,14 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   getScheduleBalance,
-  getWeeklyMetrics,
   getWeeklySummary,
-  listBlockedTimes,
-  listCalendars,
   listEvents,
 } from "@/lib/api";
 import type {
-  BlockedTime,
-  Calendar,
   Event,
   ScheduleBalanceDay,
   ScheduleBalanceResponse,
   ScheduleSummary,
-  WeeklyMetrics,
 } from "@/lib/types";
 
 function formatDateTime(iso: string): string {
@@ -91,22 +85,6 @@ function todayLabel(): string {
 // The shared bottom scale shows 0h, 4h, 8h.
 const BALANCE_SCALE_MAX_MIN = 8 * 60;
 
-// Day-level intensity bucket from total busy minutes.
-// Mirrors the OVERLOADED_DAY_BUSY_MINUTES threshold from the backend.
-type LoadLevel = "light" | "balanced" | "heavy";
-
-function loadLevel(busyMin: number): LoadLevel {
-  if (busyMin >= 6 * 60) return "heavy";
-  if (busyMin >= 3 * 60) return "balanced";
-  return "light";
-}
-
-function loadLevelLabel(level: LoadLevel): string {
-  if (level === "heavy") return "Heavy";
-  if (level === "balanced") return "Balanced";
-  return "Light";
-}
-
 function weekdayShort(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: "short" });
@@ -167,13 +145,10 @@ function computeBalanceStatus(days: ScheduleBalanceDay[]): BalanceStatus {
 }
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [todayEvents, setTodayEvents] = useState<Event[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
-  const [todayBlocked, setTodayBlocked] = useState<BlockedTime[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
   const [balance, setBalance] = useState<ScheduleBalanceResponse | null>(null);
-  const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -187,18 +162,14 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [m, ev, up, bt, ws, sb, cals] = await Promise.all([
-          getWeeklyMetrics(),
+        const [ev, up, ws, sb] = await Promise.all([
           listEvents({ startTime: start, endTime: end }),
           listEvents({ startTime: upStart, endTime: upEnd }),
-          listBlockedTimes({ startTime: start, endTime: end }),
           getWeeklySummary(),
           getScheduleBalance(),
-          listCalendars(),
         ]);
         if (cancelled) return;
 
-        setMetrics(m);
         setTodayEvents(
           [...ev].sort(
             (a, b) =>
@@ -213,10 +184,8 @@ export default function DashboardPage() {
               new Date(b.start_time).getTime()
           )
         );
-        setTodayBlocked(bt);
         setSummary(ws);
         setBalance(sb);
-        setCalendars(cals);
       } catch (e) {
         if (cancelled) return;
         const msg =
@@ -236,9 +205,6 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, []);
-
-  const calendarsById = new Map<number, Calendar>();
-  calendars.forEach((c) => calendarsById.set(c.id, c));
 
   return (
     <section>
@@ -265,7 +231,7 @@ export default function DashboardPage() {
               ✦
             </div>
             <div className="overview-content">
-              <h3 className="overview-title">Weekly Overview</h3>
+              <h3 className="overview-title">Weekly AI Summary</h3>
               {summary ? (
                 <>
                   <p className="overview-text">{summary.generated_text}</p>
@@ -286,51 +252,6 @@ export default function DashboardPage() {
           <div className="page-grid">
             {/* Main column: Today's Schedule */}
             <div className="page-main">
-              <div className="card today-card">
-                <div className="card-header-row">
-                  <h3 className="card-title">Today&apos;s Schedule</h3>
-                  <span className="pill neutral">
-                    {todayEvents.length} event
-                    {todayEvents.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-
-                {todayEvents.length === 0 ? (
-                  <div className="empty-state">
-                    <span className="empty-state-strong">
-                      Nothing scheduled today
-                    </span>
-                    Time to focus, or{" "}
-                    <Link href="/schedule">plan something on Schedule</Link>.
-                  </div>
-                ) : (
-                  <ul className="timeline">
-                    {todayEvents.map((e) => {
-                      const cal = calendarsById.get(e.calendar_id);
-                      return (
-                        <li key={e.id} className="timeline-item">
-                          <div className="timeline-time">
-                            {formatTime(e.start_time)}
-                          </div>
-                          <span className="timeline-dot" aria-hidden />
-                          <div className="timeline-event">
-                            <div className="timeline-event-title">
-                              {e.title}
-                            </div>
-                            <div className="timeline-event-meta">
-                              {formatTime(e.start_time)} →{" "}
-                              {formatTime(e.end_time)}
-                              {cal ? ` · ${cal.name}` : ""}
-                              {e.location ? ` · ${e.location}` : ""}
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
               {/* Schedule Balance */}
               <div className="card balance-card">
                 <div className="card-header-row">
@@ -528,39 +449,63 @@ export default function DashboardPage() {
 
             {/* Right sidebar */}
             <aside className="page-side">
-              {/* Upcoming */}
-              <div className="sidebar-card">
-                <div className="sidebar-card-title">
-                  <span>Upcoming</span>
-                  <Link href="/schedule" className="link">
-                    View all →
-                  </Link>
-                </div>
-                {upcomingEvents.length === 0 ? (
-                  <div className="empty-state">
-                    <span className="empty-state-strong">
-                      No upcoming events
-                    </span>
-                    Nothing scheduled in the next 7 days.
+              {/* Upcoming — carries today/next-event context */}
+              {(() => {
+                const now = Date.now();
+                const nextEvent =
+                  upcomingEvents.find(
+                    (e) => new Date(e.start_time).getTime() >= now
+                  ) ?? upcomingEvents[0];
+                return (
+                  <div className="sidebar-card upcoming-card">
+                    <div className="sidebar-card-title">
+                      <span>Upcoming</span>
+                    </div>
+
+                    <div className="upcoming-context">
+                      <span className="upcoming-today">
+                        Today · {todayEvents.length} event
+                        {todayEvents.length === 1 ? "" : "s"}
+                      </span>
+                      {nextEvent && (
+                        <span className="upcoming-next">
+                          Next: {nextEvent.title} at{" "}
+                          {formatTime(nextEvent.start_time)}
+                        </span>
+                      )}
+                    </div>
+
+                    {upcomingEvents.length === 0 ? (
+                      <div className="empty-state">
+                        <span className="empty-state-strong">
+                          No upcoming events
+                        </span>
+                        Nothing scheduled in the next 7 days.
+                      </div>
+                    ) : (
+                      <ul className="list-rows">
+                        {upcomingEvents.slice(0, 4).map((e) => (
+                          <li key={e.id}>
+                            <div className="row-icon" aria-hidden>
+                              ▣
+                            </div>
+                            <div className="row-body">
+                              <div className="row-title">{e.title}</div>
+                              <div className="row-meta">
+                                {formatDayTime(e.start_time)}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <Link href="/schedule" className="upcoming-link">
+                      View full schedule →
+                    </Link>
                   </div>
-                ) : (
-                  <ul className="list-rows">
-                    {upcomingEvents.slice(0, 5).map((e) => (
-                      <li key={e.id}>
-                        <div className="row-icon" aria-hidden>
-                          ▣
-                        </div>
-                        <div className="row-body">
-                          <div className="row-title">{e.title}</div>
-                          <div className="row-meta">
-                            {formatDayTime(e.start_time)}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Daily Rhythm — frontend MVP defaults; no backend endpoint yet. */}
               <div className="sidebar-card rhythm-card">
@@ -587,87 +532,6 @@ export default function DashboardPage() {
                 <p className="rhythm-note muted small">
                   Using MVP defaults.
                 </p>
-              </div>
-
-              {/* Blocked Times Today */}
-              <div className="sidebar-card">
-                <div className="sidebar-card-title">
-                  <span>Blocked Times Today</span>
-                </div>
-                {todayBlocked.length === 0 ? (
-                  <div className="empty-state">
-                    <span className="empty-state-strong">
-                      No blocked time
-                    </span>
-                    Today is wide open.
-                  </div>
-                ) : (
-                  <ul className="list-rows">
-                    {todayBlocked.map((b) => (
-                      <li key={b.id}>
-                        <div className="row-icon danger" aria-hidden>
-                          ⊘
-                        </div>
-                        <div className="row-body">
-                          <div className="row-title">{b.title}</div>
-                          <div className="row-meta">
-                            {formatTime(b.start_time)} →{" "}
-                            {formatTime(b.end_time)}
-                            {b.reason ? ` · ${b.reason}` : ""}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Weekly Metrics */}
-              <div className="sidebar-card">
-                <div className="sidebar-card-title">
-                  <span>Weekly Metrics</span>
-                </div>
-                {metrics ? (
-                  <div className="metric-rows">
-                    <div className="metric-row">
-                      <span className="metric-label">Events</span>
-                      <span className="metric-value">
-                        {metrics.total_events}
-                      </span>
-                    </div>
-                    <div className="metric-row">
-                      <span className="metric-label">Scheduled minutes</span>
-                      <span className="metric-value">
-                        {metrics.total_scheduled_minutes}
-                      </span>
-                    </div>
-                    <div className="metric-row">
-                      <span className="metric-label">Blocked minutes</span>
-                      <span className="metric-value">
-                        {metrics.total_blocked_minutes}
-                      </span>
-                    </div>
-                    <div className="metric-row">
-                      <span className="metric-label">Busiest day</span>
-                      <span className="metric-value">
-                        {metrics.busiest_day ?? "—"}
-                      </span>
-                    </div>
-                    <div className="metric-row">
-                      <span className="metric-label muted small">
-                        Week range
-                      </span>
-                      <span className="metric-value muted small">
-                        {metrics.week_start} → {metrics.week_end}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <span className="empty-state-strong">No metrics yet</span>
-                    Metrics will appear once data is available.
-                  </div>
-                )}
               </div>
             </aside>
           </div>
