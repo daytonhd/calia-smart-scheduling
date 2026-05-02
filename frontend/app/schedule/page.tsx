@@ -3,22 +3,16 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
-  createBlockedTime,
   createEvent,
-  deleteBlockedTime,
   deleteEvent,
   getProposedRescheduleOptions,
   getRescheduleOptions,
   getWeeklyMetrics,
-  listBlockedTimes,
   listCalendars,
   listEvents,
-  updateBlockedTime,
   updateEvent,
 } from "@/lib/api";
 import type {
-  BlockedTime,
-  BlockedTimeCreate,
   Calendar,
   Event,
   EventCreate,
@@ -67,23 +61,6 @@ function fromLocalInputNaive(v: string): string {
   let s = v.replace(/Z$/, "").replace(/[+-]\d{2}:?\d{2}$/, "");
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s = `${s}:00`;
   return s;
-}
-
-// Convert an ISO datetime from the backend into a datetime-local input value
-// (YYYY-MM-DDTHH:MM). Parses the wall-clock components directly from the
-// string when it is naive, so we never let `new Date` apply a local-time
-// shift to what we already know is naive.
-function toLocalInput(iso: string): string {
-  const naive = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
-  if (naive) {
-    const [, y, m, d, hh, mm] = naive;
-    return `${y}-${m}-${d}T${hh}:${mm}`;
-  }
-  const d = new Date(iso);
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
 }
 
 function shiftDateInput(input: string, days: number): string {
@@ -216,7 +193,7 @@ function hoursOnDay(iso: string, dayKey: string): number {
   return (t - dayStart) / 3600000;
 }
 
-// Return absolute placement for an event/blocked-time on `dayKey`, clipped
+// Return absolute placement for an event on `dayKey`, clipped
 // to the visible 8 AM..6 PM window. Returns null if it does not overlap
 // the visible window on that day.
 function placeOnGrid(
@@ -305,22 +282,6 @@ function composeNaiveIso(date: string, time: string): string {
   return `${date}T${t}`;
 }
 
-interface BlockedFormState {
-  title: string;
-  reason: string;
-  notes: string;
-  start_time: string; // datetime-local
-  end_time: string;   // datetime-local
-}
-
-const EMPTY_BLOCKED_FORM: BlockedFormState = {
-  title: "",
-  reason: "",
-  notes: "",
-  start_time: "",
-  end_time: "",
-};
-
 interface ConflictDetail {
   reason_code: string;
   message: string;
@@ -339,7 +300,6 @@ export default function SchedulePage() {
 
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [blockedTimes, setBlockedTimes] = useState<BlockedTime[]>([]);
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -367,14 +327,6 @@ export default function SchedulePage() {
   const [detailsOptionsError, setDetailsOptionsError] =
     useState<string | null>(null);
 
-  // Inline blocked-time create/edit panel state.
-  const [blockedFormOpen, setBlockedFormOpen] = useState<boolean>(false);
-  const [blockedForm, setBlockedForm] =
-    useState<BlockedFormState>(EMPTY_BLOCKED_FORM);
-  const [editingBlockedId, setEditingBlockedId] = useState<number | null>(null);
-  const [blockedSubmitting, setBlockedSubmitting] = useState<boolean>(false);
-  const [blockedFormError, setBlockedFormError] = useState<string | null>(null);
-
   const calendarsById = useMemo(() => {
     const map = new Map<number, Calendar>();
     calendars.forEach((c) => map.set(c.id, c));
@@ -391,18 +343,12 @@ export default function SchedulePage() {
     try {
       const startIso = dateInputToNaiveStart(start);
       const endIso = dateInputToNaiveEndExclusive(end);
-      const [evs, blocks] = await Promise.all([
-        listEvents({
-          calendarId: calId ? Number(calId) : undefined,
-          startTime: startIso,
-          endTime: endIso,
-        }),
-        listBlockedTimes({ startTime: startIso, endTime: endIso }).catch(
-          () => [] as BlockedTime[]
-        ),
-      ]);
+      const evs = await listEvents({
+        calendarId: calId ? Number(calId) : undefined,
+        startTime: startIso,
+        endTime: endIso,
+      });
       setEvents(evs);
-      setBlockedTimes(blocks);
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -410,7 +356,7 @@ export default function SchedulePage() {
     }
   }
 
-  // Initial load: calendars + events + blocked times + metrics
+  // Initial load: calendars + events + metrics
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -419,18 +365,14 @@ export default function SchedulePage() {
       try {
         const startIso = dateInputToNaiveStart(appliedStart);
         const endIso = dateInputToNaiveEndExclusive(appliedEnd);
-        const [cals, evs, blocks, m] = await Promise.all([
+        const [cals, evs, m] = await Promise.all([
           listCalendars(),
           listEvents({ startTime: startIso, endTime: endIso }),
-          listBlockedTimes({ startTime: startIso, endTime: endIso }).catch(
-            () => [] as BlockedTime[]
-          ),
           getWeeklyMetrics().catch(() => null),
         ]);
         if (cancelled) return;
         setCalendars(cals);
         setEvents(evs);
-        setBlockedTimes(blocks);
         setMetrics(m);
       } catch (e) {
         if (cancelled) return;
@@ -524,7 +466,6 @@ export default function SchedulePage() {
 
   function openCreateForm() {
     resetForm();
-    closeBlockedForm();
     setFormOpen(true);
   }
 
@@ -548,7 +489,6 @@ export default function SchedulePage() {
       end_date: end.date,
       end_time: end.time,
     });
-    closeBlockedForm();
     setFormOpen(true);
   }
 
@@ -579,7 +519,6 @@ export default function SchedulePage() {
     if (!detailsEvent) return;
     const ev = detailsEvent;
     closeDetails();
-    closeBlockedForm();
     startEdit(ev);
     setFormOpen(true);
   }
@@ -626,7 +565,6 @@ export default function SchedulePage() {
     if (!detailsEvent) return;
     const ev = detailsEvent;
     closeDetails();
-    closeBlockedForm();
     // Pre-populate the edit form for this event.
     startEdit(ev);
     // Then overlay the chosen start/end values.
@@ -745,97 +683,6 @@ export default function SchedulePage() {
     setFormError(null);
     setFormOptions(null);
     setFormOptionsError(null);
-  }
-
-  function resetBlockedForm() {
-    setBlockedForm(EMPTY_BLOCKED_FORM);
-    setEditingBlockedId(null);
-    setBlockedFormError(null);
-  }
-
-  function closeBlockedForm() {
-    resetBlockedForm();
-    setBlockedFormOpen(false);
-  }
-
-  function openCreateBlocked() {
-    resetBlockedForm();
-    // Close the event panel so only one form is open at a time.
-    resetForm();
-    setFormOpen(false);
-    setBlockedFormOpen(true);
-  }
-
-  function startEditBlocked(b: BlockedTime) {
-    setEditingBlockedId(b.id);
-    setBlockedFormError(null);
-    setBlockedForm({
-      title: b.title,
-      reason: b.reason ?? "",
-      notes: b.notes ?? "",
-      start_time: toLocalInput(b.start_time),
-      end_time: toLocalInput(b.end_time),
-    });
-    // Close the event panel so only one form is open at a time.
-    resetForm();
-    setFormOpen(false);
-    setBlockedFormOpen(true);
-  }
-
-  function cancelBlockedForm() {
-    closeBlockedForm();
-  }
-
-  async function onSubmitBlocked(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBlockedFormError(null);
-
-    if (!blockedForm.title.trim()) {
-      setBlockedFormError("Title is required.");
-      return;
-    }
-    if (!blockedForm.start_time || !blockedForm.end_time) {
-      setBlockedFormError("Start and end time are required.");
-      return;
-    }
-    if (new Date(blockedForm.start_time) >= new Date(blockedForm.end_time)) {
-      setBlockedFormError("Start time must be before end time.");
-      return;
-    }
-
-    const payload: BlockedTimeCreate = {
-      title: blockedForm.title.trim(),
-      reason: blockedForm.reason.trim() || null,
-      notes: blockedForm.notes.trim() || null,
-      start_time: fromLocalInputNaive(blockedForm.start_time),
-      end_time: fromLocalInputNaive(blockedForm.end_time),
-    };
-
-    setBlockedSubmitting(true);
-    try {
-      if (editingBlockedId != null) {
-        await updateBlockedTime(editingBlockedId, payload);
-      } else {
-        await createBlockedTime(payload);
-      }
-      closeBlockedForm();
-      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
-    } catch (err) {
-      setBlockedFormError(describeError(err));
-    } finally {
-      setBlockedSubmitting(false);
-    }
-  }
-
-  async function onDeleteBlocked(id: number) {
-    if (!window.confirm("Delete this blocked time?")) return;
-    try {
-      await deleteBlockedTime(id);
-      if (editingBlockedId === id) closeBlockedForm();
-      await loadSchedule(appliedStart, appliedEnd, calendarFilter);
-    } catch (err) {
-      setError(describeError(err));
-    }
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -1013,15 +860,6 @@ export default function SchedulePage() {
             disabled={formOpen && editingId == null}
           >
             + Add Event
-          </button>
-
-          <button
-            type="button"
-            className="ghost"
-            onClick={openCreateBlocked}
-            disabled={blockedFormOpen && editingBlockedId == null}
-          >
-            + Add Blocked Time
           </button>
         </div>
       </div>
@@ -1532,123 +1370,6 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Inline blocked-time create/edit panel */}
-      {blockedFormOpen && (
-        <div className="card" style={{ marginBottom: "1.25rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <h3 style={{ margin: 0 }}>
-              {editingBlockedId != null
-                ? "Edit blocked time"
-                : "New blocked time"}
-            </h3>
-            <button
-              type="button"
-              className="ghost"
-              onClick={cancelBlockedForm}
-              disabled={blockedSubmitting}
-            >
-              Close
-            </button>
-          </div>
-
-          <form onSubmit={onSubmitBlocked} className="event-form">
-            <label>
-              Title *
-              <input
-                type="text"
-                value={blockedForm.title}
-                onChange={(e) =>
-                  setBlockedForm((f) => ({ ...f, title: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label>
-              Reason
-              <input
-                type="text"
-                value={blockedForm.reason}
-                onChange={(e) =>
-                  setBlockedForm((f) => ({ ...f, reason: e.target.value }))
-                }
-                placeholder="e.g. Focus time, PTO"
-              />
-            </label>
-
-            <label>
-              Start *
-              <input
-                type="datetime-local"
-                value={blockedForm.start_time}
-                onChange={(e) =>
-                  setBlockedForm((f) => ({ ...f, start_time: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label>
-              End *
-              <input
-                type="datetime-local"
-                value={blockedForm.end_time}
-                onChange={(e) =>
-                  setBlockedForm((f) => ({ ...f, end_time: e.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label className="full">
-              Notes
-              <textarea
-                rows={3}
-                value={blockedForm.notes}
-                onChange={(e) =>
-                  setBlockedForm((f) => ({ ...f, notes: e.target.value }))
-                }
-              />
-            </label>
-
-            {blockedFormError && (
-              <div className="error-box full" role="alert">
-                {blockedFormError}
-              </div>
-            )}
-
-            <div className="form-actions full">
-              <button
-                type="submit"
-                className="primary"
-                disabled={blockedSubmitting}
-              >
-                {blockedSubmitting
-                  ? "Saving…"
-                  : editingBlockedId != null
-                  ? "Update blocked time"
-                  : "Create blocked time"}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={cancelBlockedForm}
-                disabled={blockedSubmitting}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       <div className="page-grid schedule-page-grid">
         {/* Main: weekly calendar grid */}
         <div className="page-main">
@@ -1704,9 +1425,6 @@ export default function SchedulePage() {
                 const dayEvents = events.filter((ev) =>
                   overlapsDay(ev.start_time, ev.end_time, key)
                 );
-                const dayBlocks = blockedTimes.filter((b) =>
-                  overlapsDay(b.start_time, b.end_time, key)
-                );
                 const today = isToday(key);
                 const alt = idx % 2 === 1;
                 const colClasses = ["cal-day-col"];
@@ -1718,60 +1436,6 @@ export default function SchedulePage() {
                     className={colClasses.join(" ")}
                     style={{ height: GRID_HEIGHT }}
                   >
-                    {/* Blocked / unavailable time */}
-                    {dayBlocks.map((b) => {
-                      const place = placeOnGrid(
-                        b.start_time,
-                        b.end_time,
-                        key
-                      );
-                      if (!place) return null;
-                      return (
-                        <div
-                          key={`b-${b.id}-${key}`}
-                          className="cal-blocked"
-                          style={{ top: place.top, height: place.height }}
-                          title={`${b.title} • Blocked`}
-                        >
-                          <button
-                            type="button"
-                            className="cal-blocked-inner"
-                            onClick={() => startEditBlocked(b)}
-                            aria-label={`Edit blocked time ${b.title}`}
-                          >
-                            <span
-                              className="cal-blocked-icon"
-                              aria-hidden
-                            >
-                              ⊘
-                            </span>
-                            <div className="cal-blocked-text">
-                              <div className="cal-blocked-title">
-                                {b.title}
-                              </div>
-                              {place.height >= 40 && (
-                                <div className="cal-blocked-time">
-                                  {formatTimeRange(b.start_time, b.end_time)}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            className="cal-event-del"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteBlocked(b.id);
-                            }}
-                            aria-label={`Delete blocked time ${b.title}`}
-                            title="Delete"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-
                     {/* Events */}
                     {dayEvents.map((ev) => {
                       const place = placeOnGrid(
@@ -1898,12 +1562,6 @@ export default function SchedulePage() {
                   <span className="metric-label">Scheduled minutes</span>
                   <span className="metric-value">
                     {metrics.total_scheduled_minutes}
-                  </span>
-                </div>
-                <div className="metric-row">
-                  <span className="metric-label">Blocked minutes</span>
-                  <span className="metric-value">
-                    {metrics.total_blocked_minutes}
                   </span>
                 </div>
                 <div className="metric-row">
