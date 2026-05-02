@@ -335,24 +335,6 @@ export default function DashboardPage() {
               <div className="card balance-card">
                 <div className="card-header-row">
                   <h3 className="card-title">Schedule Balance</h3>
-                  {balance && balance.days.length > 0 && (
-                    (() => {
-                      const status = computeBalanceStatus(balance.days);
-                      const cls =
-                        status.label === "Heavy"
-                          ? "heavy"
-                          : status.label === "Slightly Heavy"
-                          ? "slight-heavy"
-                          : status.label === "Light"
-                          ? "light"
-                          : "balanced";
-                      return (
-                        <span className={`pill balance-pill ${cls}`}>
-                          {status.label}
-                        </span>
-                      );
-                    })()
-                  )}
                 </div>
 
                 {!balance || balance.days.length === 0 ? (
@@ -360,98 +342,173 @@ export default function DashboardPage() {
                     <span className="empty-state-strong">
                       No schedule data yet
                     </span>
-                    Add events or blocked times to see how balanced your week
-                    is.
+                    Add events to see how balanced your week is.
                   </div>
                 ) : (
                   (() => {
                     const status = computeBalanceStatus(balance.days);
-                    const maxBusy = Math.max(
-                      1,
+                    // Daily Load y-axis max: round up max busy hours to even number, min 8h.
+                    const maxBusyMin = Math.max(
                       ...balance.days.map((d) => d.total_busy_minutes)
+                    );
+                    const maxAxisHours = Math.max(
+                      8,
+                      Math.ceil(maxBusyMin / 60 / 2) * 2
+                    );
+                    const maxAxisMin = maxAxisHours * 60;
+                    const peakIdx = balance.days.findIndex(
+                      (d) => d.total_busy_minutes === maxBusyMin
+                    );
+                    // Average busy minutes → marker position on Light↔Heavy gradient.
+                    // 0h → 0%, 3h → 50%, 6h → 100%.
+                    const avgBusyMin =
+                      balance.days.reduce(
+                        (s, d) => s + d.total_busy_minutes,
+                        0
+                      ) / balance.days.length;
+                    const markerPct = Math.min(
+                      100,
+                      Math.max(0, (avgBusyMin / (6 * 60)) * 100)
+                    );
+                    const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+                      Math.round(f * maxAxisHours)
                     );
                     return (
                       <>
-                        <p className="balance-status">
-                          <span className="balance-status-label">
-                            {status.label}
-                          </span>
-                          <span className="balance-status-sep">—</span>
-                          <span className="balance-status-detail">
-                            {status.detail}
-                          </span>
-                        </p>
-
-                        <div className="balance-section">
-                          <div className="balance-section-title">
-                            Free Capacity
+                        <div className="balance-grid">
+                          {/* Free Capacity — horizontal bars */}
+                          <div className="balance-subcard">
+                            <div className="balance-subcard-head">
+                              <h4 className="balance-subcard-title">
+                                Free Capacity
+                              </h4>
+                              <p className="balance-subcard-sub">
+                                Open time within suggestion hours
+                              </p>
+                            </div>
+                            <div className="capacity-bars">
+                              {balance.days.map((d) => {
+                                const pct = Math.min(
+                                  100,
+                                  (d.free_minutes / BALANCE_SCALE_MAX_MIN) *
+                                    100
+                                );
+                                const tight =
+                                  d.has_weak_buffer || d.is_overloaded;
+                                return (
+                                  <div className="capacity-row" key={d.date}>
+                                    <div className="capacity-day">
+                                      {weekdayShort(d.date)}
+                                    </div>
+                                    <div className="capacity-track">
+                                      <div
+                                        className={`capacity-fill ${
+                                          tight ? "tight" : ""
+                                        }`}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <div className="capacity-scale">
+                                <span>0h</span>
+                                <span>4h</span>
+                                <span>8h</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="capacity-bars">
-                            {balance.days.map((d) => {
-                              const pct = Math.min(
-                                100,
-                                (d.free_minutes / BALANCE_SCALE_MAX_MIN) * 100
-                              );
-                              return (
-                                <div className="capacity-row" key={d.date}>
-                                  <div className="capacity-day">
-                                    {weekdayShort(d.date)}
-                                  </div>
-                                  <div className="capacity-track">
-                                    <div
-                                      className="capacity-fill"
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
+
+                          {/* Daily Load — vertical bars with y-axis */}
+                          <div className="balance-subcard">
+                            <div className="balance-subcard-head">
+                              <h4 className="balance-subcard-title">
+                                Daily Load
+                              </h4>
+                              <p className="balance-subcard-sub">
+                                Hours of scheduled time each day.
+                              </p>
+                            </div>
+                            <div className="load-chart">
+                              <div className="load-yaxis">
+                                {[...yTicks].reverse().map((t) => (
+                                  <span key={t} className="load-ytick">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="load-plot">
+                                <div className="load-gridlines" aria-hidden>
+                                  {yTicks.map((t) => (
+                                    <div key={t} className="load-gridline" />
+                                  ))}
                                 </div>
-                              );
-                            })}
-                            <div className="capacity-scale">
-                              <span>0h</span>
-                              <span>4h</span>
-                              <span>8h</span>
+                                <div className="load-bars">
+                                  {balance.days.map((d, i) => {
+                                    const h = Math.min(
+                                      100,
+                                      (d.total_busy_minutes / maxAxisMin) * 100
+                                    );
+                                    const isPeak = i === peakIdx && maxBusyMin > 0;
+                                    return (
+                                      <div className="load-col" key={d.date}>
+                                        <div className="load-bar-wrap">
+                                          <div
+                                            className={`load-bar ${
+                                              isPeak ? "peak" : ""
+                                            }`}
+                                            style={{ height: `${h}%` }}
+                                            title={`${Math.round(
+                                              (d.total_busy_minutes / 60) * 10
+                                            ) / 10}h scheduled`}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="load-xaxis">
+                              {balance.days.map((d) => (
+                                <span key={d.date}>{weekdayShort(d.date)}</span>
+                              ))}
                             </div>
                           </div>
                         </div>
 
-                        <div className="balance-section">
-                          <div className="balance-section-title">
-                            Daily Load
+                        {/* Bottom strip: Light–Balanced–Heavy gradient + interpretation */}
+                        <div className="balance-bottom">
+                          <div className="balance-gradient">
+                            <div className="balance-gradient-labels">
+                              <span>Light</span>
+                              <span>Balanced</span>
+                              <span>Heavy</span>
+                            </div>
+                            <div className="balance-gradient-track">
+                              <div
+                                className="balance-gradient-marker"
+                                style={{ left: `${markerPct}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="load-bars">
-                            {balance.days.map((d) => {
-                              const level = loadLevel(d.total_busy_minutes);
-                              const h = Math.min(
-                                100,
-                                (d.total_busy_minutes / maxBusy) * 100
-                              );
-                              return (
-                                <div className="load-col" key={d.date}>
-                                  <div className="load-bar-wrap">
-                                    <div
-                                      className={`load-bar load-${level}`}
-                                      style={{ height: `${h}%` }}
-                                      title={`${loadLevelLabel(level)} · ${Math.round(d.total_busy_minutes / 60 * 10) / 10}h`}
-                                    />
-                                  </div>
-                                  <div className="load-day">
-                                    {weekdayShort(d.date)}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="load-legend">
-                            <span className="load-legend-item">
-                              <span className="load-swatch load-light" /> Light
-                            </span>
-                            <span className="load-legend-item">
-                              <span className="load-swatch load-balanced" />{" "}
-                              Balanced
-                            </span>
-                            <span className="load-legend-item">
-                              <span className="load-swatch load-heavy" /> Heavy
-                            </span>
+                          <div className="balance-interpretation">
+                            <div
+                              className={`balance-interpretation-label ${
+                                status.label === "Heavy"
+                                  ? "heavy"
+                                  : status.label === "Slightly Heavy"
+                                  ? "slight-heavy"
+                                  : status.label === "Light"
+                                  ? "light"
+                                  : "balanced"
+                              }`}
+                            >
+                              {status.label}
+                            </div>
+                            <p className="balance-interpretation-detail">
+                              {status.detail}
+                            </p>
                           </div>
                         </div>
 
@@ -503,6 +560,33 @@ export default function DashboardPage() {
                     ))}
                   </ul>
                 )}
+              </div>
+
+              {/* Daily Rhythm — frontend MVP defaults; no backend endpoint yet. */}
+              <div className="sidebar-card rhythm-card">
+                <div className="sidebar-card-title">
+                  <span>Daily Rhythm</span>
+                </div>
+                <div className="rhythm-rows">
+                  <div className="rhythm-row">
+                    <span className="rhythm-label">Awake hours</span>
+                    <span className="rhythm-value">7:00 AM – 11:00 PM</span>
+                  </div>
+                  <div className="rhythm-row">
+                    <span className="rhythm-label">Suggestions use</span>
+                    <span className="rhythm-value">8:00 AM – 9:00 PM</span>
+                  </div>
+                </div>
+                <Link
+                  href="/settings"
+                  className="rhythm-edit-btn"
+                  aria-label="Edit Daily Rhythm in settings"
+                >
+                  Edit rhythm
+                </Link>
+                <p className="rhythm-note muted small">
+                  Using MVP defaults.
+                </p>
               </div>
 
               {/* Blocked Times Today */}
