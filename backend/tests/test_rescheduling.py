@@ -112,7 +112,12 @@ def test_avoids_other_events(session):
                     and o["end_time"] > datetime(2026, 4, 20, 13, 0))
 
 
-def test_avoids_blocked_times(session):
+def test_avoids_other_occupied_events(session):
+    """Replacement options must avoid time blocked by another event.
+
+    All occupied time is now represented as Events; a blocked-time-style
+    use case is just an Event with an appropriate label.
+    """
     _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
@@ -120,10 +125,13 @@ def test_avoids_blocked_times(session):
         start=datetime(2026, 4, 20, 10, 0),
         end=datetime(2026, 4, 20, 11, 0),
     )
-    make_blocked_time(
-        session,
+    # An event representing "lunch / occupied time" — what BlockedTime
+    # used to model.
+    make_event(
+        session, cal.id,
         start=datetime(2026, 4, 20, 14, 0),
         end=datetime(2026, 4, 20, 15, 0),
+        title="Lunch",
     )
 
     result = find_replacement_slots(
@@ -203,7 +211,7 @@ def test_same_day_options_rank_first(session):
 
 
 def test_returns_empty_when_no_valid_replacement(session):
-    """Search range fully blocked → no options."""
+    """Search range fully occupied by events → no options."""
     _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
@@ -211,16 +219,18 @@ def test_returns_empty_when_no_valid_replacement(session):
         start=datetime(2026, 4, 20, 10, 0),
         end=datetime(2026, 4, 20, 11, 0),
     )
-    # Block the entire Monday availability except the original event slot.
-    make_blocked_time(
-        session,
+    # Fill the rest of the Monday availability with events.
+    make_event(
+        session, cal.id,
         start=datetime(2026, 4, 20, 9, 0),
         end=datetime(2026, 4, 20, 10, 0),
+        title="Block A",
     )
-    make_blocked_time(
-        session,
+    make_event(
+        session, cal.id,
         start=datetime(2026, 4, 20, 11, 0),
         end=datetime(2026, 4, 20, 17, 0),
+        title="Block B",
     )
 
     result = find_replacement_slots(

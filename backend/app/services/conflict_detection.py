@@ -1,17 +1,14 @@
 """Conflict detection service — reusable logic for all scheduling conflict checks.
 
 Active conflict types:
-  1. EVENT_OVERLAP         — proposed time overlaps an existing event
-  2. BLOCKED_TIME_OVERLAP  — proposed time overlaps a transitional
-                             occupied-time record (legacy BlockedTime row)
+  1. EVENT_OVERLAP — proposed time overlaps an existing event
 
-The product model is shifting toward representing all commitments as
-categorized events; the BLOCKED_TIME_OVERLAP path is retained internally
-during this transition and is not emphasized in user-facing wording.
+All saved Events count as occupied time. Blocked-time-style use cases are
+represented as ordinary Events; BlockedTime no longer affects scheduling.
 
 OUTSIDE_AVAILABILITY is no longer an active conflict. Manual event create /
 update is allowed outside AvailabilityWindow rows and outside Daily Rhythm
-hours as long as the range is valid and does not overlap occupied time.
+hours as long as the range is valid and does not overlap an existing event.
 The legacy _check_availability helper remains in the file as transitional
 internals but is not invoked from any active code path.
 
@@ -31,20 +28,19 @@ from typing import List, NamedTuple, Optional, Tuple
 from sqlmodel import Session, select
 
 from app.models.availability_window import AvailabilityWindow
-from app.models.blocked_time import BlockedTime
 from app.models.event import Event
 from app.schemas.schedule import ConflictDetail, SlotSuggestion
 from app.services.daily_rhythm import get_suggestion_windows_for_range
 
 
 class FreeWindow(NamedTuple):
-    """A maximal interval in which the user is free (inside availability, not
-    overlapped by any event or blocked time)."""
+    """A maximal interval in which the user is free (inside the daily
+    suggestion window and not overlapped by any event)."""
 
     start_time: datetime
     end_time: datetime
 
-# Single-user MVP — all blocked times and availability windows belong to this user.
+# Single-user MVP — availability windows belong to this user.
 MVP_USER_ID = 1
 
 # Weekday names for human-readable messages.
@@ -99,39 +95,6 @@ def _check_event_overlap(
             start_time=e.start_time,
             end_time=e.end_time,
             related_event_id=e.id,
-        ))
-    return details
-
-
-def _check_blocked_time_overlap(
-    start_time: datetime,
-    end_time: datetime,
-    session: Session,
-) -> List[ConflictDetail]:
-    """Return one ConflictDetail per blocked-time row that overlaps the proposed interval.
-
-    Overlap condition (touching boundaries excluded):
-        blocked.start_time < end_time AND blocked.end_time > start_time
-    """
-    query = select(BlockedTime).where(
-        BlockedTime.user_id == MVP_USER_ID,
-        BlockedTime.start_time < end_time,
-        BlockedTime.end_time > start_time,
-    )
-    overlapping = session.exec(query).all()
-
-    details: List[ConflictDetail] = []
-    for bt in overlapping:
-        details.append(ConflictDetail(
-            reason_code="BLOCKED_TIME_OVERLAP",
-            conflict_type="blocked_time",
-            message=(
-                f"This time overlaps an existing schedule item from "
-                f"{_format_clock(bt.start_time)} to {_format_clock(bt.end_time)}."
-            ),
-            start_time=bt.start_time,
-            end_time=bt.end_time,
-            related_blocked_time_id=bt.id,
         ))
     return details
 
@@ -204,14 +167,13 @@ def check_all_conflicts(
     """Return every detected conflict for a proposed event placement.
 
     Active checks:
-      1. EVENT_OVERLAP        — proposed time overlaps an existing event
-      2. BLOCKED_TIME_OVERLAP — proposed time overlaps a blocked-time row
+      1. EVENT_OVERLAP — proposed time overlaps an existing event
 
     OUTSIDE_AVAILABILITY is no longer an active conflict. Manual events
     outside AvailabilityWindow rows or outside Daily Rhythm hours are
-    allowed as long as they have a valid range and do not overlap occupied
-    time. The legacy _check_availability helper is retained for now but is
-    not invoked here.
+    allowed as long as they have a valid range and do not overlap an
+    existing event. The legacy _check_availability helper is retained for
+    now but is not invoked here.
 
     Args:
         start_time:        Proposed event start (naive datetime).
@@ -223,10 +185,7 @@ def check_all_conflicts(
     Returns:
         List of ConflictDetail — empty means no conflicts.
     """
-    conflicts: List[ConflictDetail] = []
-    conflicts.extend(_check_event_overlap(start_time, end_time, session, exclude_event_id))
-    conflicts.extend(_check_blocked_time_overlap(start_time, end_time, session))
-    return conflicts
+    return _check_event_overlap(start_time, end_time, session, exclude_event_id)
 
 
 def _subtract_intervals(
@@ -276,10 +235,9 @@ def find_free_windows(
     Driven by Daily Rhythm suggestion hours — AvailabilityWindow rows are not
     consulted here. For each day in the range:
       1. Build the daily suggestion window (DEFAULT_SUGGESTIONS_START–_END).
-      2. Collect existing events and other occupied schedule items
-         (transitional BlockedTime rows) that overlap that window.
-      3. Subtract the union of occupied intervals and emit the remaining
-         free sub-intervals.
+      2. Collect existing events that overlap that window.
+      3. Subtract the union of event intervals and emit the remaining free
+         sub-intervals.
 
     This is a reusable lower-level helper — slot-fitting and triage logic
     layer on top by walking the returned windows. It does not enforce any
@@ -298,36 +256,15 @@ def find_free_windows(
                 Event.end_time > w_start,
             )
         ).all()
-        blocked = session.exec(
-            select(BlockedTime).where(
-                BlockedTime.user_id == MVP_USER_ID,
-                BlockedTime.start_time < w_end,
-                BlockedTime.end_time > w_start,
-            )
-        ).all()
 
         occupied: List[Tuple[datetime, datetime]] = [
             (e.start_time, e.end_time) for e in events
-        ] + [(bt.start_time, bt.end_time) for bt in blocked]
+        ]
 
         for s, e in _subtract_intervals(w_start, w_end, occupied):
             results.append(FreeWindow(start_time=s, end_time=e))
 
     return results
-
-
-def _has_event_or_blocked_overlap(
-    start_time: datetime,
-    end_time: datetime,
-    session: Session,
-    exclude_event_id: Optional[int],
-) -> bool:
-    """Return True iff any event or blocked time overlaps [start_time, end_time)."""
-    if _check_event_overlap(start_time, end_time, session, exclude_event_id):
-        return True
-    if _check_blocked_time_overlap(start_time, end_time, session):
-        return True
-    return False
 
 
 def find_available_slots(
@@ -344,7 +281,7 @@ def find_available_slots(
     30-minute increments. AvailabilityWindow rows are not consulted — the
     Daily Rhythm window is the single source of truth for which hours we
     suggest in. A candidate slot is valid when it does not overlap any
-    existing event or other occupied schedule item.
+    existing event.
 
     Each returned slot includes a deterministic reason_code (EARLIEST_VALID_SLOT)
     and an explanation string. Ranking is simple: earliest valid slots first.
@@ -377,7 +314,7 @@ def find_available_slots(
         while candidate_start + slot_duration <= window_end:
             candidate_end = candidate_start + slot_duration
 
-            if not _has_event_or_blocked_overlap(
+            if not _check_event_overlap(
                 candidate_start,
                 candidate_end,
                 session,

@@ -1,7 +1,7 @@
-"""Weekly scheduling metrics — facts derived from events and blocked times.
+"""Weekly scheduling metrics — facts derived from events.
 
-Metrics are computed by clipping each event/blocked-time interval to the target
-week [week_start 00:00, week_end 00:00) and summing minutes per day. Anything
+Metrics are computed by clipping each event interval to the target week
+[week_start 00:00, week_end 00:00) and summing minutes per day. Anything
 outside the week is ignored. The busiest day is the calendar day within the
 week with the most scheduled event minutes (ties resolved by earliest date).
 """
@@ -11,9 +11,7 @@ from typing import List, Optional, Tuple
 
 from sqlmodel import Session, select
 
-from app.models.blocked_time import BlockedTime
 from app.models.event import Event
-from app.services.conflict_detection import MVP_USER_ID  # noqa: F401  (MVP context)
 
 
 def monday_of(d: date) -> date:
@@ -70,6 +68,10 @@ def compute_weekly_metrics(
         dict with fields: week_start, week_end, total_events,
         total_blocked_times, total_scheduled_minutes, total_blocked_minutes,
         busiest_day (ISO date string or None), busiest_day_minutes.
+
+        ``total_blocked_times`` and ``total_blocked_minutes`` are preserved
+        in the response shape for frontend compatibility but always return
+        0 — BlockedTime no longer affects scheduling.
     """
     anchor = week_start or date.today()
     ws = monday_of(anchor)
@@ -85,23 +87,12 @@ def compute_weekly_metrics(
             Event.end_time > week_start_dt,
         )
     ).all()
-    blocked = session.exec(
-        select(BlockedTime).where(
-            BlockedTime.user_id == MVP_USER_ID,
-            BlockedTime.start_time < week_end_dt,
-            BlockedTime.end_time > week_start_dt,
-        )
-    ).all()
 
     event_minutes_per_day = _clip_minutes_per_day(
         [(e.start_time, e.end_time) for e in events], ws, we_exclusive
     )
-    blocked_minutes_per_day = _clip_minutes_per_day(
-        [(b.start_time, b.end_time) for b in blocked], ws, we_exclusive
-    )
 
     total_scheduled = sum(event_minutes_per_day)
-    total_blocked = sum(blocked_minutes_per_day)
 
     if total_scheduled > 0:
         # argmax over event minutes; earliest day wins ties.
@@ -118,9 +109,9 @@ def compute_weekly_metrics(
         "week_start": ws,
         "week_end": we_inclusive,
         "total_events": len(events),
-        "total_blocked_times": len(blocked),
+        "total_blocked_times": 0,
         "total_scheduled_minutes": total_scheduled,
-        "total_blocked_minutes": total_blocked,
+        "total_blocked_minutes": 0,
         "busiest_day": busiest_day,
         "busiest_day_minutes": busiest_day_minutes,
     }

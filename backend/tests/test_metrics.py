@@ -53,7 +53,10 @@ def test_counts_events_and_minutes(session):
     assert m["busiest_day_minutes"] == 90
 
 
-def test_blocked_minutes_counted_separately(session):
+def test_blocked_time_does_not_affect_metrics(session):
+    """Legacy BlockedTime rows are ignored by metrics. The
+    total_blocked_times / total_blocked_minutes fields are preserved in
+    the response shape for frontend compatibility but always return 0."""
     make_blocked_time(
         session,
         start=datetime(2026, 4, 21, 9, 0),
@@ -62,10 +65,9 @@ def test_blocked_minutes_counted_separately(session):
 
     m = compute_weekly_metrics(session, week_start=MONDAY)
 
-    assert m["total_blocked_times"] == 1
-    assert m["total_blocked_minutes"] == 120
+    assert m["total_blocked_times"] == 0
+    assert m["total_blocked_minutes"] == 0
     assert m["total_scheduled_minutes"] == 0
-    # Blocked time must not drive busiest_day (events only).
     assert m["busiest_day"] is None
 
 

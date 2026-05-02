@@ -3,7 +3,7 @@
 Free-window output is now driven by Daily Rhythm suggestion hours
 (8:00–21:00 by default) rather than AvailabilityWindow rows. Each day in
 the requested range emits one suggestion window minus any overlapping
-events or blocked times.
+events.
 """
 
 from datetime import date, datetime
@@ -74,7 +74,12 @@ def test_event_splits_daily_rhythm_window(session):
     ]
 
 
-def test_blocked_time_is_excluded(session):
+def test_blocked_time_does_not_affect_free_windows(session):
+    """Legacy BlockedTime rows must no longer split free windows.
+
+    All saved Events count as occupied; BlockedTime rows are ignored even
+    if the table still has data during the transition.
+    """
     make_blocked_time(
         session,
         start=datetime(2026, 4, 20, 10, 0),
@@ -83,10 +88,10 @@ def test_blocked_time_is_excluded(session):
 
     windows = find_free_windows(MONDAY, MONDAY, session)
 
-    assert [(w.start_time, w.end_time) for w in windows] == [
-        (_rhythm_start(MONDAY), datetime(2026, 4, 20, 10, 0)),
-        (datetime(2026, 4, 20, 11, 0), _rhythm_end(MONDAY)),
-    ]
+    # The whole Daily Rhythm window remains free — blocked time is ignored.
+    assert len(windows) == 1
+    assert windows[0].start_time == _rhythm_start(MONDAY)
+    assert windows[0].end_time == _rhythm_end(MONDAY)
 
 
 def test_event_touching_window_edge_does_not_shrink_available(session):

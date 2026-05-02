@@ -7,17 +7,14 @@ Pins:
   2. Replacement option explanations (saved + proposed) reference daily
      suggestion hours / existing events / occupied schedule items, and never
      mention "blocked time" or "availability".
-  3. BLOCKED_TIME_OVERLAP conflict messages do not surface the legacy
-     "blocked time" phrase to end users — the reason_code stays stable but
-     the human message uses neutral wording.
-  4. Weekly Schedule Balance (compute_weekly_triage) bounds free capacity by
+  3. Weekly Schedule Balance (compute_weekly_triage) bounds free capacity by
      Daily Rhythm suggestion hours (8:00-21:00 = 780 min/day), works with
      zero AvailabilityWindow rows, and subtracts events from that capacity.
 """
 
 from datetime import date, datetime, time
 
-from app.services.conflict_detection import check_all_conflicts, find_available_slots
+from app.services.conflict_detection import find_available_slots
 from app.services.daily_rhythm import (
     DEFAULT_SUGGESTIONS_END,
     DEFAULT_SUGGESTIONS_START,
@@ -28,7 +25,7 @@ from app.services.rescheduling import (
 )
 from app.services.triage import compute_weekly_triage
 
-from .factories import make_blocked_time, make_calendar, make_event
+from .factories import make_calendar, make_event
 
 MONDAY = date(2026, 4, 20)
 
@@ -120,41 +117,7 @@ def test_proposed_replacement_explanation_uses_clean_wording(session):
 
 
 # ---------------------------------------------------------------------------
-# 3. BLOCKED_TIME_OVERLAP human message no longer says "blocked time"
-# ---------------------------------------------------------------------------
-
-
-def test_blocked_time_overlap_message_does_not_say_blocked_time(session):
-    """The reason_code stays BLOCKED_TIME_OVERLAP for client compatibility,
-    but the human-readable message does not surface the legacy phrase."""
-    make_blocked_time(
-        session,
-        start=datetime(2026, 4, 20, 14, 0),
-        end=datetime(2026, 4, 20, 15, 0),
-    )
-
-    conflicts = check_all_conflicts(
-        start_time=datetime(2026, 4, 20, 14, 30),
-        end_time=datetime(2026, 4, 20, 15, 30),
-        session=session,
-    )
-
-    blocked_conflict = next(
-        c for c in conflicts if c.reason_code == "BLOCKED_TIME_OVERLAP"
-    )
-    # reason_code stays stable for clients.
-    assert blocked_conflict.reason_code == "BLOCKED_TIME_OVERLAP"
-    # User-facing message must not say "blocked time"/"blocked times".
-    msg_lower = blocked_conflict.message.lower()
-    assert "blocked time" not in msg_lower
-    assert "blocked times" not in msg_lower
-    # And it should still describe the offending interval clearly.
-    assert "2:00 PM" in blocked_conflict.message
-    assert "3:00 PM" in blocked_conflict.message
-
-
-# ---------------------------------------------------------------------------
-# 4. Schedule Balance / free-capacity bounds use Daily Rhythm hours
+# 3. Schedule Balance / free-capacity bounds use Daily Rhythm hours
 # ---------------------------------------------------------------------------
 
 

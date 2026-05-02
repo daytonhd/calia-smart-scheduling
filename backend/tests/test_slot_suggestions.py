@@ -2,7 +2,7 @@
 
 Slot suggestions are now driven by Daily Rhythm suggestion hours
 (8:00–21:00 by default). AvailabilityWindow rows are not consulted; slots
-must avoid existing events and blocked times.
+must avoid existing events.
 """
 
 from datetime import date, datetime, time
@@ -141,8 +141,33 @@ def test_slots_avoid_existing_events(session):
         )
 
 
-def test_slot_touching_blocked_time_boundary_is_valid(session):
-    """A slot that ends exactly when a blocked time starts is not a conflict."""
+def test_slot_touching_event_boundary_is_valid(session):
+    """A slot that ends exactly when an event starts is not a conflict."""
+    cal = make_calendar(session)
+    make_event(
+        session,
+        cal.id,
+        start=datetime(2026, 4, 20, 10, 0),
+        end=datetime(2026, 4, 20, 11, 0),
+    )
+
+    slots = find_available_slots(
+        duration_minutes=60,
+        start_date=MONDAY,
+        end_date=MONDAY,
+        max_results=10,
+        session=session,
+    )
+
+    # 9:00-10:00 ends at event start — not overlap → valid.
+    starts = [s.start_time for s in slots]
+    assert datetime(2026, 4, 20, 9, 0) in starts
+    # 9:30-10:30 overlaps the event → must not appear.
+    assert datetime(2026, 4, 20, 9, 30) not in starts
+
+
+def test_slots_ignore_blocked_time_rows(session):
+    """Legacy BlockedTime rows must not affect slot suggestions."""
     make_blocked_time(
         session,
         start=datetime(2026, 4, 20, 10, 0),
@@ -157,11 +182,11 @@ def test_slot_touching_blocked_time_boundary_is_valid(session):
         session=session,
     )
 
-    # 9:00-10:00 ends at blocked-time start — not overlap → valid.
+    # Slots that "overlap" the blocked-time interval should still appear,
+    # because BlockedTime no longer factors into scheduling.
     starts = [s.start_time for s in slots]
-    assert datetime(2026, 4, 20, 9, 0) in starts
-    # 9:30-10:30 overlaps the blocked time → must not appear.
-    assert datetime(2026, 4, 20, 9, 30) not in starts
+    assert datetime(2026, 4, 20, 9, 30) in starts
+    assert datetime(2026, 4, 20, 10, 0) in starts
 
 
 def test_empty_when_window_fully_occupied(session):

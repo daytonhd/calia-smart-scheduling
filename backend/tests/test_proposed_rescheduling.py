@@ -111,12 +111,16 @@ def test_excludes_existing_events_from_proposed_suggestions(session):
                     and o["end_time"] > datetime(2026, 4, 20, 13, 0))
 
 
-def test_excludes_blocked_times_from_proposed_suggestions(session):
+def test_excludes_other_occupied_events_from_proposed_suggestions(session):
+    """Proposed-event suggestions avoid time occupied by other events
+    (which is how blocked-time-style use cases are now represented)."""
     _weekday_availability(session)
-    make_blocked_time(
-        session,
+    cal = make_calendar(session)
+    make_event(
+        session, cal.id,
         start=datetime(2026, 4, 20, 14, 0),
         end=datetime(2026, 4, 20, 15, 0),
+        title="Lunch",
     )
 
     result = find_replacement_slots_for_proposed(

@@ -78,22 +78,28 @@ def test_overloaded_day_detection(session):
     assert any(w["reason_code"] == "OVERLOADED_DAY" for w in monday["warnings"])
 
 
-def test_overloaded_uses_blocked_time_too(session):
-    """Mix of events + blocked time hitting threshold also triggers."""
+def test_overloaded_uses_events_only(session):
+    """Multiple events hitting the threshold trigger overload — blocked
+    time rows do not contribute and blocked_minutes is always 0."""
     _full_week_availability(session)
     cal = make_calendar(session)
     make_event(session, cal.id,
                start=datetime(2026, 4, 20, 9, 0),
                end=datetime(2026, 4, 20, 12, 0))   # 3h
+    make_event(session, cal.id,
+               start=datetime(2026, 4, 20, 13, 0),
+               end=datetime(2026, 4, 20, 16, 0))   # 3h
+    # A blocked-time row that should NOT contribute to busy time.
     make_blocked_time(session,
-                      start=datetime(2026, 4, 20, 13, 0),
-                      end=datetime(2026, 4, 20, 16, 0))  # 3h
+                      start=datetime(2026, 4, 20, 16, 0),
+                      end=datetime(2026, 4, 20, 18, 0))
 
     triage = compute_weekly_triage(session, week_start=MONDAY)
     monday = _day(triage, MONDAY)
 
-    assert monday["scheduled_minutes"] == 180
-    assert monday["blocked_minutes"] == 180
+    assert monday["scheduled_minutes"] == 360
+    assert monday["blocked_minutes"] == 0
+    assert monday["total_busy_minutes"] == 360
     assert monday["is_overloaded"] is True
 
 
