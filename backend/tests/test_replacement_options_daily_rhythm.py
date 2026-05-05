@@ -12,6 +12,7 @@ proposed-event endpoint (find_replacement_slots_for_proposed). Each pin:
 """
 
 from datetime import date, datetime
+from typing import Optional
 
 from app.services.daily_rhythm import (
     DEFAULT_SUGGESTIONS_END,
@@ -25,6 +26,23 @@ from app.services.rescheduling import (
 from .factories import make_calendar, make_event
 
 MONDAY = date(2026, 4, 20)
+
+
+def assert_no_legacy_scheduling_language(text: Optional[str]) -> None:
+    """Assert an explanation string does not leak deprecated wording.
+
+    User-facing scheduling explanations must use the current product
+    language (Daily Rhythm, suggestion hours, occupied time, replacement
+    options, Schedule Balance) and never mention legacy "availability" or
+    "blocked time" concepts.
+    """
+    if text is None:
+        return
+    value = text.lower()
+    assert "availability" not in value, text
+    assert "blocked time" not in value, text
+    assert "blocked-time" not in value, text
+    assert "blocked_time" not in value, text
 
 
 def _within_rhythm(o):
@@ -159,7 +177,32 @@ def test_saved_replacement_explanation_mentions_no_availability_windows(session)
 
     assert result["options"], "expected at least one option"
     for o in result["options"]:
-        assert "availability window" not in o["explanation"].lower()
+        assert_no_legacy_scheduling_language(o["explanation"])
+
+
+def test_saved_replacement_explanations_avoid_legacy_language(session):
+    """Regression: every saved-event replacement option's explanation must
+    avoid the legacy "availability"/"blocked time" wording."""
+    cal = make_calendar(session)
+    ev = make_event(
+        session, cal.id,
+        start=datetime(2026, 4, 20, 10, 0),
+        end=datetime(2026, 4, 20, 11, 0),
+    )
+
+    result = find_replacement_slots(
+        event_id=ev.id,
+        search_start=datetime(2026, 4, 20, 0, 0),
+        search_end=datetime(2026, 4, 22, 23, 59),
+        max_results=10,
+        session=session,
+    )
+
+    assert result is not None
+    options = result["options"]
+    assert len(options) >= 2, "need multiple options so the assertion is meaningful"
+    for o in options:
+        assert_no_legacy_scheduling_language(o.get("explanation"))
 
 
 # ---------------------------------------------------------------------------
@@ -254,4 +297,23 @@ def test_proposed_replacement_explanation_mentions_no_availability_windows(sessi
 
     assert result["options"], "expected at least one option"
     for o in result["options"]:
-        assert "availability window" not in o["explanation"].lower()
+        assert_no_legacy_scheduling_language(o["explanation"])
+
+
+def test_proposed_replacement_explanations_avoid_legacy_language(session):
+    """Regression: every proposed-event replacement option's explanation
+    must avoid the legacy "availability"/"blocked time" wording."""
+    result = find_replacement_slots_for_proposed(
+        title="Proposed",
+        start_time=datetime(2026, 4, 20, 14, 0),
+        end_time=datetime(2026, 4, 20, 15, 0),
+        search_start=datetime(2026, 4, 20, 0, 0),
+        search_end=datetime(2026, 4, 22, 23, 59),
+        max_results=10,
+        session=session,
+    )
+
+    options = result["options"]
+    assert len(options) >= 2, "need multiple options so the assertion is meaningful"
+    for o in options:
+        assert_no_legacy_scheduling_language(o.get("explanation"))
