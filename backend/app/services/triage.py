@@ -68,10 +68,6 @@ def compute_weekly_triage(
             "days": [TriageDay-shaped dicts ...], # length 7
             "week_warnings": [TriageWarning-shaped dicts ...],
           }
-
-        The ``blocked_minutes`` field on each day is preserved in the
-        response shape for frontend compatibility but always returns 0 —
-        BlockedTime no longer affects scheduling.
     """
     week_end_inclusive = week_start + timedelta(days=DAYS_IN_WEEK - 1)
     week_end_exclusive_dt = datetime.combine(
@@ -154,7 +150,6 @@ def compute_weekly_triage(
         days.append({
             "date": day,
             "scheduled_minutes": scheduled,
-            "blocked_minutes": 0,
             "total_busy_minutes": total_busy,
             "free_minutes": free_minutes,
             "longest_free_window_minutes": longest_free,

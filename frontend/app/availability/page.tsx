@@ -4,19 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   ApiError,
   createAvailability,
-  createBlockedTime,
   deleteAvailability,
-  deleteBlockedTime,
   listAvailability,
-  listBlockedTimes,
   updateAvailability,
-  updateBlockedTime,
 } from "@/lib/api";
 import type {
   AvailabilityWindow,
   AvailabilityWindowCreate,
-  BlockedTime,
-  BlockedTimeCreate,
 } from "@/lib/types";
 
 const WEEKDAYS = [
@@ -30,6 +24,13 @@ const WEEKDAYS = [
 ];
 
 // ---------- Availability ----------
+//
+// NOTE: This page is a legacy/transitional surface for AvailabilityWindow rows.
+// Day-to-day unavailable periods, commutes, classes, focus blocks, and
+// appointments are created as normal events with a category from the Schedule
+// page. Active scheduling logic does not depend on AvailabilityWindow rows;
+// this surface is retained only for backward compatibility while the
+// underlying tables remain.
 
 interface AvailFormState {
   weekday: string;    // "0"-"6"
@@ -51,51 +52,8 @@ function toTimeInput(v: string): string {
   return v.length >= 5 ? v.slice(0, 5) : v;
 }
 
-// ---------- Blocked Times ----------
-
-interface BlockedFormState {
-  title: string;
-  reason: string;
-  notes: string;
-  start_time: string; // datetime-local
-  end_time: string;
-}
-
-const EMPTY_BLOCKED_FORM: BlockedFormState = {
-  title: "",
-  reason: "",
-  notes: "",
-  start_time: "",
-  end_time: "",
-};
-
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}
-
-function fromLocalInput(v: string): string {
-  // Backend MVP time contract rejects tz-aware datetimes — pass through naively.
-  return v.length === 16 ? `${v}:00` : v;
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export default function AvailabilityPage() {
   const [windows, setWindows] = useState<AvailabilityWindow[]>([]);
-  const [blocked, setBlocked] = useState<BlockedTime[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,20 +63,12 @@ export default function AvailabilityPage() {
   const [availSubmitting, setAvailSubmitting] = useState<boolean>(false);
   const [availFormError, setAvailFormError] = useState<string | null>(null);
 
-  // Blocked form state
-  const [blockedForm, setBlockedForm] =
-    useState<BlockedFormState>(EMPTY_BLOCKED_FORM);
-  const [blockedEditingId, setBlockedEditingId] = useState<number | null>(null);
-  const [blockedSubmitting, setBlockedSubmitting] = useState<boolean>(false);
-  const [blockedFormError, setBlockedFormError] = useState<string | null>(null);
-
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
-      const [a, b] = await Promise.all([listAvailability(), listBlockedTimes()]);
+      const a = await listAvailability();
       setWindows(a);
-      setBlocked(b);
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -196,89 +146,20 @@ export default function AvailabilityPage() {
     }
   }
 
-  // ---------- Blocked handlers ----------
-
-  function resetBlockedForm() {
-    setBlockedForm(EMPTY_BLOCKED_FORM);
-    setBlockedEditingId(null);
-    setBlockedFormError(null);
-  }
-
-  function startEditBlocked(b: BlockedTime) {
-    setBlockedEditingId(b.id);
-    setBlockedFormError(null);
-    setBlockedForm({
-      title: b.title,
-      reason: b.reason ?? "",
-      notes: b.notes ?? "",
-      start_time: toLocalInput(b.start_time),
-      end_time: toLocalInput(b.end_time),
-    });
-  }
-
-  async function onSubmitBlocked(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBlockedFormError(null);
-
-    if (!blockedForm.title.trim()) {
-      setBlockedFormError("Title is required.");
-      return;
-    }
-    if (!blockedForm.start_time || !blockedForm.end_time) {
-      setBlockedFormError("Start and end time are required.");
-      return;
-    }
-    if (new Date(blockedForm.start_time) >= new Date(blockedForm.end_time)) {
-      setBlockedFormError("Start time must be before end time.");
-      return;
-    }
-
-    const payload: BlockedTimeCreate = {
-      title: blockedForm.title.trim(),
-      reason: blockedForm.reason.trim() || null,
-      notes: blockedForm.notes.trim() || null,
-      start_time: fromLocalInput(blockedForm.start_time),
-      end_time: fromLocalInput(blockedForm.end_time),
-    };
-
-    setBlockedSubmitting(true);
-    try {
-      if (blockedEditingId != null) {
-        await updateBlockedTime(blockedEditingId, payload);
-      } else {
-        await createBlockedTime(payload);
-      }
-      resetBlockedForm();
-      await loadAll();
-    } catch (err) {
-      setBlockedFormError(describeError(err));
-    } finally {
-      setBlockedSubmitting(false);
-    }
-  }
-
-  async function onDeleteBlocked(id: number) {
-    if (!window.confirm("Delete this blocked time?")) return;
-    try {
-      await deleteBlockedTime(id);
-      if (blockedEditingId === id) resetBlockedForm();
-      await loadAll();
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
-
   return (
     <section>
-      <h2>Availability & Blocked Times</h2>
+      <h2>Availability</h2>
+      <p className="muted small">
+        Legacy weekly availability windows. Day-to-day unavailable periods
+        (commute, classes, focus blocks, appointments, etc.) are now created
+        as normal events with a category from the Schedule page.
+      </p>
 
       {error && (
         <div className="error-box" role="alert">
           {error}
         </div>
       )}
-
-      {/* -------- Availability -------- */}
 
       <h3>{availEditingId != null ? "Edit availability" : "New availability window"}</h3>
       <p className="muted small">
@@ -389,134 +270,6 @@ export default function AvailabilityPage() {
                   Edit
                 </button>
                 <button type="button" onClick={() => onDeleteAvail(w.id)}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* -------- Blocked Times -------- */}
-
-      <h3 style={{ marginTop: "2.5rem" }}>
-        {blockedEditingId != null ? "Edit blocked time" : "New blocked time"}
-      </h3>
-      <p className="muted small">
-        Specific time ranges that should be treated as unavailable.
-      </p>
-      <form onSubmit={onSubmitBlocked} className="event-form">
-        <label className="full">
-          Title *
-          <input
-            type="text"
-            value={blockedForm.title}
-            onChange={(e) =>
-              setBlockedForm((f) => ({ ...f, title: e.target.value }))
-            }
-            required
-          />
-        </label>
-
-        <label>
-          Start *
-          <input
-            type="datetime-local"
-            value={blockedForm.start_time}
-            onChange={(e) =>
-              setBlockedForm((f) => ({ ...f, start_time: e.target.value }))
-            }
-            required
-          />
-        </label>
-
-        <label>
-          End *
-          <input
-            type="datetime-local"
-            value={blockedForm.end_time}
-            onChange={(e) =>
-              setBlockedForm((f) => ({ ...f, end_time: e.target.value }))
-            }
-            required
-          />
-        </label>
-
-        <label>
-          Reason
-          <input
-            type="text"
-            value={blockedForm.reason}
-            onChange={(e) =>
-              setBlockedForm((f) => ({ ...f, reason: e.target.value }))
-            }
-            placeholder="e.g. PTO, meeting"
-          />
-        </label>
-
-        <label>
-          Notes
-          <input
-            type="text"
-            value={blockedForm.notes}
-            onChange={(e) =>
-              setBlockedForm((f) => ({ ...f, notes: e.target.value }))
-            }
-          />
-        </label>
-
-        {blockedFormError && (
-          <div className="error-box full" role="alert">
-            {blockedFormError}
-          </div>
-        )}
-
-        <div className="form-actions full">
-          <button type="submit" disabled={blockedSubmitting}>
-            {blockedSubmitting
-              ? "Saving…"
-              : blockedEditingId != null
-              ? "Update blocked time"
-              : "Create blocked time"}
-          </button>
-          {blockedEditingId != null && (
-            <button
-              type="button"
-              onClick={resetBlockedForm}
-              disabled={blockedSubmitting}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
-
-      <h3 style={{ marginTop: "1.5rem" }}>Blocked times</h3>
-      {loading ? (
-        <p className="muted">Loading…</p>
-      ) : blocked.length === 0 ? (
-        <p className="muted">No blocked times yet.</p>
-      ) : (
-        <ul className="event-list">
-          {blocked.map((b) => (
-            <li key={b.id} className="event-row">
-              <div>
-                <strong>{b.title}</strong>
-                <span className="muted">
-                  {" — "}
-                  {formatDateTime(b.start_time)} → {formatDateTime(b.end_time)}
-                </span>
-                <div className="muted small">
-                  {b.reason ? `reason: ${b.reason}` : ""}
-                  {b.reason && b.notes ? " · " : ""}
-                  {b.notes ? `notes: ${b.notes}` : ""}
-                </div>
-              </div>
-              <div className="row-actions">
-                <button type="button" onClick={() => startEditBlocked(b)}>
-                  Edit
-                </button>
-                <button type="button" onClick={() => onDeleteBlocked(b.id)}>
                   Delete
                 </button>
               </div>

@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 
 from app.services.metrics import compute_weekly_metrics, monday_of
 
-from .factories import make_availability, make_blocked_time, make_calendar, make_event
+from .factories import make_availability, make_calendar, make_event
 
 # Week of Monday 2026-04-20 → Sunday 2026-04-26.
 MONDAY = date(2026, 4, 20)
@@ -16,9 +16,7 @@ def test_empty_week_returns_zero_metrics(session):
     assert m["week_start"] == MONDAY
     assert m["week_end"] == SUNDAY
     assert m["total_events"] == 0
-    assert m["total_blocked_times"] == 0
     assert m["total_scheduled_minutes"] == 0
-    assert m["total_blocked_minutes"] == 0
     assert m["busiest_day"] is None
     assert m["busiest_day_minutes"] == 0
 
@@ -51,24 +49,6 @@ def test_counts_events_and_minutes(session):
     assert m["total_scheduled_minutes"] == 150
     assert m["busiest_day"] == date(2026, 4, 22)
     assert m["busiest_day_minutes"] == 90
-
-
-def test_blocked_time_does_not_affect_metrics(session):
-    """Legacy BlockedTime rows are ignored by metrics. The
-    total_blocked_times / total_blocked_minutes fields are preserved in
-    the response shape for frontend compatibility but always return 0."""
-    make_blocked_time(
-        session,
-        start=datetime(2026, 4, 21, 9, 0),
-        end=datetime(2026, 4, 21, 11, 0),
-    )
-
-    m = compute_weekly_metrics(session, week_start=MONDAY)
-
-    assert m["total_blocked_times"] == 0
-    assert m["total_blocked_minutes"] == 0
-    assert m["total_scheduled_minutes"] == 0
-    assert m["busiest_day"] is None
 
 
 def test_intervals_outside_week_are_ignored(session):

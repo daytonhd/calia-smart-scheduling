@@ -14,7 +14,6 @@ from app.services.triage import (
 
 from .factories import (
     make_availability,
-    make_blocked_time,
     make_calendar,
     make_event,
 )
@@ -34,8 +33,8 @@ def _day(triage, d: date):
 
 
 def test_empty_low_data_week_is_clean(session):
-    """No events / no blocked times → each day is fully free inside the
-    Daily Rhythm window (8:00–21:00 = 780 min) and there are no warnings."""
+    """No events → each day is fully free inside the Daily Rhythm
+    window (8:00–21:00 = 780 min) and there are no warnings."""
     triage = compute_weekly_triage(session, week_start=MONDAY)
 
     assert triage["week_start"] == MONDAY
@@ -43,7 +42,6 @@ def test_empty_low_data_week_is_clean(session):
     assert len(triage["days"]) == 7
     for d in triage["days"]:
         assert d["scheduled_minutes"] == 0
-        assert d["blocked_minutes"] == 0
         assert d["total_busy_minutes"] == 0
         # 8:00–21:00 = 13h = 780 min of free time per day.
         assert d["free_minutes"] == 780
@@ -58,7 +56,7 @@ def test_empty_low_data_week_is_clean(session):
 
 
 def test_overloaded_day_detection(session):
-    """6h+ scheduled+blocked on Monday → OVERLOADED_DAY warning."""
+    """6h+ scheduled on Monday → OVERLOADED_DAY warning."""
     _full_week_availability(session)
     cal = make_calendar(session)
     # 6 hours of scheduled events on Monday: 9-12 and 13-16 (6h total)
@@ -79,8 +77,7 @@ def test_overloaded_day_detection(session):
 
 
 def test_overloaded_uses_events_only(session):
-    """Multiple events hitting the threshold trigger overload — blocked
-    time rows do not contribute and blocked_minutes is always 0."""
+    """Multiple events hitting the threshold trigger overload."""
     _full_week_availability(session)
     cal = make_calendar(session)
     make_event(session, cal.id,
@@ -89,16 +86,11 @@ def test_overloaded_uses_events_only(session):
     make_event(session, cal.id,
                start=datetime(2026, 4, 20, 13, 0),
                end=datetime(2026, 4, 20, 16, 0))   # 3h
-    # A blocked-time row that should NOT contribute to busy time.
-    make_blocked_time(session,
-                      start=datetime(2026, 4, 20, 16, 0),
-                      end=datetime(2026, 4, 20, 18, 0))
 
     triage = compute_weekly_triage(session, week_start=MONDAY)
     monday = _day(triage, MONDAY)
 
     assert monday["scheduled_minutes"] == 360
-    assert monday["blocked_minutes"] == 0
     assert monday["total_busy_minutes"] == 360
     assert monday["is_overloaded"] is True
 
@@ -135,8 +127,8 @@ def test_fragmented_day_detection(session):
 
 
 def test_weak_buffer_detection(session):
-    """Day where events/blocked times consume nearly the whole Daily Rhythm
-    window leaves <90 min free → WEAK_BUFFER."""
+    """Day where events consume nearly the whole Daily Rhythm window
+    leaves <90 min free → WEAK_BUFFER."""
     # Daily Rhythm is 8:00-21:00 (780 min). Block 8:00-20:00 (720 min) so
     # only the 20:00-21:00 hour (60 min) remains free — below threshold.
     cal = make_calendar(session)
@@ -168,8 +160,8 @@ def test_longest_free_window_calculation(session):
 
 
 def test_unscheduled_day_not_flagged_weak_buffer(session):
-    """A day with zero events/blocked times has the full Daily Rhythm
-    window free (780 min) — well above the weak-buffer threshold."""
+    """A day with zero events has the full Daily Rhythm window free
+    (780 min) — well above the weak-buffer threshold."""
     triage = compute_weekly_triage(session, week_start=MONDAY)
     monday = _day(triage, MONDAY)
 

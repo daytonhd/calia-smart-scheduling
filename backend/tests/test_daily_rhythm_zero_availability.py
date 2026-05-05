@@ -11,8 +11,7 @@ Pins the post-Batch 4 product contract:
   * Conflict checks never return OUTSIDE_AVAILABILITY.
   * Schedule Balance uses default Suggestion capacity (780 min/day) and
     subtracts events from it.
-  * Default explanations never mention "availability" or "blocked time"
-    (case-insensitive).
+  * Default explanations never mention "availability" (case-insensitive).
 
 This file exists alongside the granular per-feature test files; it
 exercises each acceptance criterion as one focused contract suite.
@@ -286,11 +285,11 @@ def test_schedule_balance_free_minutes_reflect_events(session):
 
 
 # ---------------------------------------------------------------------------
-# 9. Explanation regression — no "availability" or "blocked time"
+# 9. Explanation regression — no "availability"
 # ---------------------------------------------------------------------------
 
 
-_FORBIDDEN_PHRASES = ("availability", "blocked time")
+_FORBIDDEN_PHRASES = ("availability",)
 
 
 def _assert_no_forbidden_phrases(text: str) -> None:
@@ -302,7 +301,7 @@ def _assert_no_forbidden_phrases(text: str) -> None:
         )
 
 
-def test_slot_explanation_omits_availability_and_blocked_time(session):
+def test_slot_explanation_omits_availability(session):
     slots = find_available_slots(
         duration_minutes=60,
         start_date=MONDAY,
@@ -315,7 +314,7 @@ def test_slot_explanation_omits_availability_and_blocked_time(session):
         _assert_no_forbidden_phrases(s.explanation)
 
 
-def test_saved_replacement_explanation_omits_availability_and_blocked_time(
+def test_saved_replacement_explanation_omits_availability(
     session,
 ):
     cal = make_calendar(session)
@@ -338,7 +337,7 @@ def test_saved_replacement_explanation_omits_availability_and_blocked_time(
         _assert_no_forbidden_phrases(o["explanation"])
 
 
-def test_proposed_replacement_explanation_omits_availability_and_blocked_time(
+def test_proposed_replacement_explanation_omits_availability(
     session,
 ):
     result = find_replacement_slots_for_proposed(

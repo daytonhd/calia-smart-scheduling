@@ -16,7 +16,6 @@ from app.services.rescheduling import find_replacement_slots_for_proposed
 
 from .factories import (
     make_availability,
-    make_blocked_time,
     make_calendar,
     make_event,
 )
@@ -113,7 +112,7 @@ def test_excludes_existing_events_from_proposed_suggestions(session):
 
 def test_excludes_other_occupied_events_from_proposed_suggestions(session):
     """Proposed-event suggestions avoid time occupied by other events
-    (which is how blocked-time-style use cases are now represented)."""
+    (categorized events are the sole occupied-time model)."""
     _weekday_availability(session)
     cal = make_calendar(session)
     make_event(

@@ -66,12 +66,8 @@ def compute_weekly_metrics(
 
     Returns:
         dict with fields: week_start, week_end, total_events,
-        total_blocked_times, total_scheduled_minutes, total_blocked_minutes,
-        busiest_day (ISO date string or None), busiest_day_minutes.
-
-        ``total_blocked_times`` and ``total_blocked_minutes`` are preserved
-        in the response shape for frontend compatibility but always return
-        0 — BlockedTime no longer affects scheduling.
+        total_scheduled_minutes, busiest_day (ISO date string or None),
+        busiest_day_minutes.
     """
     anchor = week_start or date.today()
     ws = monday_of(anchor)
@@ -109,9 +105,7 @@ def compute_weekly_metrics(
         "week_start": ws,
         "week_end": we_inclusive,
         "total_events": len(events),
-        "total_blocked_times": 0,
         "total_scheduled_minutes": total_scheduled,
-        "total_blocked_minutes": 0,
         "busiest_day": busiest_day,
         "busiest_day_minutes": busiest_day_minutes,
     }

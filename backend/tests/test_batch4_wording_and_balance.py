@@ -2,11 +2,10 @@
 
 Pins:
   1. Slot suggestion explanations reference daily suggestion hours / existing
-     events / occupied schedule items, and never mention "blocked time" or
-     "availability".
+     events / occupied schedule items, and never mention "availability".
   2. Replacement option explanations (saved + proposed) reference daily
      suggestion hours / existing events / occupied schedule items, and never
-     mention "blocked time" or "availability".
+     mention "availability".
   3. Weekly Schedule Balance (compute_weekly_triage) bounds free capacity by
      Daily Rhythm suggestion hours (8:00-21:00 = 780 min/day), works with
      zero AvailabilityWindow rows, and subtracts events from that capacity.
@@ -41,8 +40,6 @@ _ALLOWED_TOKENS = (
 _FORBIDDEN_TOKENS = (
     "availability",
     "availability window",
-    "blocked time",
-    "blocked times",
 )
 
 
@@ -181,8 +178,7 @@ def test_balance_event_outside_rhythm_does_not_change_free_capacity(session):
 
 
 def test_balance_overload_message_uses_neutral_wording(session):
-    """Overloaded-day warnings should not surface the legacy
-    "blocked time" phrase to end users."""
+    """Overloaded-day warnings should report busy hours."""
     cal = make_calendar(session)
     make_event(
         session, cal.id,
@@ -195,8 +191,5 @@ def test_balance_overload_message_uses_neutral_wording(session):
 
     overloaded = [w for w in monday["warnings"] if w["reason_code"] == "OVERLOADED_DAY"]
     assert len(overloaded) == 1
-    msg_lower = overloaded[0]["message"].lower()
-    assert "blocked time" not in msg_lower
-    assert "blocked times" not in msg_lower
     # Must still report the busy hour count.
     assert "6 hours" in overloaded[0]["message"]

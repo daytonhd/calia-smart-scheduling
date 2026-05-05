@@ -6,9 +6,6 @@ import type {
   AvailabilityWindow,
   AvailabilityWindowCreate,
   AvailabilityWindowUpdate,
-  BlockedTime,
-  BlockedTimeCreate,
-  BlockedTimeUpdate,
   Calendar,
   CalendarCreate,
   CalendarUpdate,
@@ -139,45 +136,6 @@ export function listEvents(params?: ListEventsParams | number): Promise<Event[]>
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return request<Event[]>(`/events/${suffix}`);
-}
-
-// ----- Blocked times -----
-
-export interface ListBlockedTimesParams {
-  startTime?: string; // ISO datetime
-  endTime?: string;   // ISO datetime
-}
-
-export function listBlockedTimes(
-  params?: ListBlockedTimesParams
-): Promise<BlockedTime[]> {
-  const qs = new URLSearchParams();
-  if (params?.startTime) qs.set("start_time", params.startTime);
-  if (params?.endTime) qs.set("end_time", params.endTime);
-
-  const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  return request<BlockedTime[]>(`/blocked-times/${suffix}`);
-}
-
-export function createBlockedTime(body: BlockedTimeCreate): Promise<BlockedTime> {
-  return request<BlockedTime>("/blocked-times/", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export function updateBlockedTime(
-  id: number,
-  body: BlockedTimeUpdate
-): Promise<BlockedTime> {
-  return request<BlockedTime>(`/blocked-times/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-}
-
-export function deleteBlockedTime(id: number): Promise<void> {
-  return request<void>(`/blocked-times/${id}`, { method: "DELETE" });
 }
 
 // ----- Availability windows -----

@@ -3,8 +3,9 @@
 Active conflict types:
   1. EVENT_OVERLAP — proposed time overlaps an existing event
 
-All saved Events count as occupied time. Blocked-time-style use cases are
-represented as ordinary Events; BlockedTime no longer affects scheduling.
+All saved Events count as occupied time. Categorized Events (e.g.
+Unavailable, Commute, Class, Focus block) are the sole occupied-time
+model.
 
 OUTSIDE_AVAILABILITY is no longer an active conflict. Manual event create /
 update is allowed outside AvailabilityWindow rows and outside Daily Rhythm

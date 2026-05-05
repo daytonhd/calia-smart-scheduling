@@ -15,16 +15,13 @@ def assert_no_legacy_scheduling_language(text: Optional[str]) -> None:
 
     The active product language is Daily Rhythm, suggestion hours, schedule
     items, occupied time, replacement options, and Schedule Balance — the
-    legacy "availability"/"blocked time" wording must not appear in any
-    user-facing explanation.
+    legacy "availability" wording must not appear in any user-facing
+    explanation.
     """
     if text is None:
         return
     value = text.lower()
     assert "availability" not in value, text
-    assert "blocked time" not in value, text
-    assert "blocked-time" not in value, text
-    assert "blocked_time" not in value, text
 
 
 def test_each_slot_has_reason_and_explanation(session):
@@ -49,7 +46,7 @@ def test_each_slot_has_reason_and_explanation(session):
 
 def test_default_slot_explanations_avoid_legacy_language(session):
     """Regression: default slot suggestion explanations must not surface the
-    legacy "availability" / "blocked time" wording in any returned slot.
+    legacy "availability" wording in any returned slot.
     """
     slots = find_available_slots(
         duration_minutes=60,

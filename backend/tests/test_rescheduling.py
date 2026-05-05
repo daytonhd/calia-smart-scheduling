@@ -9,7 +9,6 @@ from app.services.rescheduling import find_replacement_slots
 
 from .factories import (
     make_availability,
-    make_blocked_time,
     make_calendar,
     make_event,
 )
@@ -113,10 +112,9 @@ def test_avoids_other_events(session):
 
 
 def test_avoids_other_occupied_events(session):
-    """Replacement options must avoid time blocked by another event.
+    """Replacement options must avoid time occupied by another event.
 
-    All occupied time is now represented as Events; a blocked-time-style
-    use case is just an Event with an appropriate label.
+    All occupied time is represented as Events with categories.
     """
     _weekday_availability(session)
     cal = make_calendar(session)
@@ -125,8 +123,7 @@ def test_avoids_other_occupied_events(session):
         start=datetime(2026, 4, 20, 10, 0),
         end=datetime(2026, 4, 20, 11, 0),
     )
-    # An event representing "lunch / occupied time" — what BlockedTime
-    # used to model.
+    # An event representing categorized occupied time (e.g. lunch).
     make_event(
         session, cal.id,
         start=datetime(2026, 4, 20, 14, 0),

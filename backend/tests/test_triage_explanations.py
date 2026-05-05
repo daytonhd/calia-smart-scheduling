@@ -16,7 +16,6 @@ from app.services.triage import (
 
 from .factories import (
     make_availability,
-    make_blocked_time,
     make_calendar,
     make_event,
 )
@@ -122,23 +121,3 @@ def test_warning_messages_are_deterministic(session):
     assert _day(a, MONDAY)["warnings"] == _day(b, MONDAY)["warnings"]
 
 
-def test_blocked_time_does_not_contribute_to_overload_warning(session):
-    """Blocked-time rows must not contribute to the overload warning —
-    only Events count toward busy time now."""
-    _full_week_availability(session)
-    cal = make_calendar(session)
-    # 3h event plus a 3h blocked-time row. Only the 3h event counts, so the
-    # day stays under the 6h overload threshold.
-    make_event(session, cal.id,
-               start=datetime(2026, 4, 20, 9, 0),
-               end=datetime(2026, 4, 20, 12, 0))   # 3h
-    make_blocked_time(session,
-                      start=datetime(2026, 4, 20, 13, 0),
-                      end=datetime(2026, 4, 20, 16, 0))  # 3h ignored
-
-    triage = compute_weekly_triage(session, week_start=MONDAY)
-    monday = _day(triage, MONDAY)
-
-    codes = [w["reason_code"] for w in monday["warnings"]]
-    assert "OVERLOADED_DAY" not in codes
-    assert monday["blocked_minutes"] == 0

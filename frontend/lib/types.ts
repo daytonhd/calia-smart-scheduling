@@ -53,18 +53,6 @@ export interface EventUpdate {
   end_time?: string;
 }
 
-export interface BlockedTime {
-  id: number;
-  user_id: number;
-  title: string;
-  reason: string | null;
-  notes: string | null;
-  start_time: string; // ISO datetime
-  end_time: string;   // ISO datetime
-  created_at: string;
-  updated_at: string;
-}
-
 export interface AvailabilityWindow {
   id: number;
   user_id: number;
@@ -89,22 +77,6 @@ export interface AvailabilityWindowUpdate {
   active?: boolean;
 }
 
-export interface BlockedTimeCreate {
-  title: string;
-  reason?: string | null;
-  notes?: string | null;
-  start_time: string; // ISO
-  end_time: string;   // ISO
-}
-
-export interface BlockedTimeUpdate {
-  title?: string;
-  reason?: string | null;
-  notes?: string | null;
-  start_time?: string;
-  end_time?: string;
-}
-
 export interface ScheduleSummary {
   id: number;
   user_id: number;
@@ -117,9 +89,7 @@ export interface WeeklyMetrics {
   week_start: string;         // ISO date
   week_end: string;           // ISO date
   total_events: number;
-  total_blocked_times: number;
   total_scheduled_minutes: number;
-  total_blocked_minutes: number;
   busiest_day: string | null; // ISO date or null
   busiest_day_minutes: number;
 }
@@ -137,7 +107,6 @@ export interface ScheduleBalanceWarning {
 export interface ScheduleBalanceDay {
   date: string; // ISO date
   scheduled_minutes: number;
-  blocked_minutes: number;
   total_busy_minutes: number;
   free_minutes: number;
   longest_free_window_minutes: number;

@@ -33,16 +33,13 @@ def assert_no_legacy_scheduling_language(text: Optional[str]) -> None:
 
     User-facing scheduling explanations must use the current product
     language (Daily Rhythm, suggestion hours, occupied time, replacement
-    options, Schedule Balance) and never mention legacy "availability" or
-    "blocked time" concepts.
+    options, Schedule Balance) and never mention legacy "availability"
+    concepts.
     """
     if text is None:
         return
     value = text.lower()
     assert "availability" not in value, text
-    assert "blocked time" not in value, text
-    assert "blocked-time" not in value, text
-    assert "blocked_time" not in value, text
 
 
 def _within_rhythm(o):
@@ -182,7 +179,7 @@ def test_saved_replacement_explanation_mentions_no_availability_windows(session)
 
 def test_saved_replacement_explanations_avoid_legacy_language(session):
     """Regression: every saved-event replacement option's explanation must
-    avoid the legacy "availability"/"blocked time" wording."""
+    avoid the legacy "availability" wording."""
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -302,7 +299,7 @@ def test_proposed_replacement_explanation_mentions_no_availability_windows(sessi
 
 def test_proposed_replacement_explanations_avoid_legacy_language(session):
     """Regression: every proposed-event replacement option's explanation
-    must avoid the legacy "availability"/"blocked time" wording."""
+    must avoid the legacy "availability" wording."""
     result = find_replacement_slots_for_proposed(
         title="Proposed",
         start_time=datetime(2026, 4, 20, 14, 0),

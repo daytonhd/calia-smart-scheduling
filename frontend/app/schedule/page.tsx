@@ -289,7 +289,6 @@ interface ConflictDetail {
   start_time?: string | null;
   end_time?: string | null;
   related_event_id?: number | null;
-  related_blocked_time_id?: number | null;
 }
 
 export default function SchedulePage() {
@@ -998,12 +997,29 @@ export default function SchedulePage() {
                       <input
                         id="ev-category"
                         type="text"
-                        placeholder="e.g. Study, Work"
+                        list="ev-category-options"
+                        placeholder="e.g. Unavailable, Commute, Focus block"
                         value={form.category}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, category: e.target.value }))
                         }
                       />
+                      {/*
+                        Suggested categories cover unavailable periods,
+                        commutes, classes, focus blocks, and appointments —
+                        all represented as normal events. The input is
+                        free-form — typing a custom value still works.
+                      */}
+                      <datalist id="ev-category-options">
+                        <option value="Unavailable" />
+                        <option value="Commute" />
+                        <option value="Appointment" />
+                        <option value="Class" />
+                        <option value="Focus block" />
+                        <option value="Personal" />
+                        <option value="Gym" />
+                        <option value="Study" />
+                      </datalist>
                     </div>
 
                     <div className="form-field">

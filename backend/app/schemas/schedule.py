@@ -38,21 +38,18 @@ class ConflictDetail(SQLModel):
     """A single detected conflict.
 
     reason_code is a stable machine identifier. Active codes are
-    EVENT_OVERLAP and BLOCKED_TIME_OVERLAP (the latter is a transitional
-    occupied-time overlap kept for backward compatibility);
-    INVALID_TIME_RANGE may be surfaced from input validation.
-    OUTSIDE_AVAILABILITY is retained as a schema constant for backward
-    compatibility but is no longer returned from active conflict checks.
+    EVENT_OVERLAP; INVALID_TIME_RANGE may be surfaced from input
+    validation. OUTSIDE_AVAILABILITY is retained as a schema constant
+    for backward compatibility but is no longer returned from active
+    conflict checks.
     message is a deterministic backend-formatted human-readable string
-    that references existing events / occupied schedule items rather than
-    legacy "blocked time" wording.
-    conflict_type is the high-level category ("event", "blocked_time",
-    "input") — these strings are stable identifiers used by clients.
+    that references existing events / occupied schedule items.
+    conflict_type is the high-level category ("event", "input") — these
+    strings are stable identifiers used by clients.
     start_time / end_time identify the offending interval when applicable
-    (the related event or occupied-time interval, or the proposed
-    interval for input issues).
-    related_event_id / related_blocked_time_id link the conflict back to
-    a specific stored row when applicable.
+    (the related event interval, or the proposed interval for input
+    issues). related_event_id links the conflict back to a specific
+    stored row when applicable.
     """
 
     reason_code: str
@@ -61,7 +58,6 @@ class ConflictDetail(SQLModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     related_event_id: Optional[int] = None
-    related_blocked_time_id: Optional[int] = None
 
 
 class ConflictCheckResponse(SQLModel):
@@ -117,9 +113,7 @@ class WeeklyMetricsResponse(SQLModel):
     week_start: date
     week_end: date
     total_events: int
-    total_blocked_times: int
     total_scheduled_minutes: int
-    total_blocked_minutes: int
     busiest_day: Optional[date] = None
     busiest_day_minutes: int
 
@@ -151,7 +145,6 @@ class TriageDay(SQLModel):
 
     date: date
     scheduled_minutes: int
-    blocked_minutes: int
     total_busy_minutes: int
     free_minutes: int
     longest_free_window_minutes: int

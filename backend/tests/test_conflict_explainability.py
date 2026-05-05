@@ -1,7 +1,7 @@
 """Tests for explainable ConflictDetail responses.
 
 Verifies that every conflict path populates structured fields (reason_code,
-conflict_type, start_time, end_time, related_*_id) and that multiple
+conflict_type, start_time, end_time, related_event_id) and that multiple
 event conflicts are returned together.
 """
 
@@ -39,7 +39,6 @@ def test_event_overlap_detail_has_event_id_and_human_message(session):
     overlap = next(c for c in conflicts if c.reason_code == "EVENT_OVERLAP")
     assert overlap.conflict_type == "event"
     assert overlap.related_event_id == ev.id
-    assert overlap.related_blocked_time_id is None
     assert overlap.start_time == datetime(2026, 4, 20, 13, 0)
     assert overlap.end_time == datetime(2026, 4, 20, 14, 0)
     assert "1:00 PM" in overlap.message

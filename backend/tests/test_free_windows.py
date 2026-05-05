@@ -16,7 +16,6 @@ from app.services.daily_rhythm import (
 
 from .factories import (
     make_availability,
-    make_blocked_time,
     make_calendar,
     make_event,
 )
@@ -34,7 +33,7 @@ def _rhythm_end(d: date) -> datetime:
 
 
 def test_no_data_returns_full_daily_rhythm_window(session):
-    """With no events/blocked times and no AvailabilityWindow rows, the full
+    """With no events and no AvailabilityWindow rows, the full
     Daily Rhythm window for each day is free."""
     windows = find_free_windows(MONDAY, MONDAY, session)
 
@@ -72,26 +71,6 @@ def test_event_splits_daily_rhythm_window(session):
         (_rhythm_start(MONDAY), datetime(2026, 4, 20, 12, 0)),
         (datetime(2026, 4, 20, 13, 0), _rhythm_end(MONDAY)),
     ]
-
-
-def test_blocked_time_does_not_affect_free_windows(session):
-    """Legacy BlockedTime rows must no longer split free windows.
-
-    All saved Events count as occupied; BlockedTime rows are ignored even
-    if the table still has data during the transition.
-    """
-    make_blocked_time(
-        session,
-        start=datetime(2026, 4, 20, 10, 0),
-        end=datetime(2026, 4, 20, 11, 0),
-    )
-
-    windows = find_free_windows(MONDAY, MONDAY, session)
-
-    # The whole Daily Rhythm window remains free — blocked time is ignored.
-    assert len(windows) == 1
-    assert windows[0].start_time == _rhythm_start(MONDAY)
-    assert windows[0].end_time == _rhythm_end(MONDAY)
 
 
 def test_event_touching_window_edge_does_not_shrink_available(session):

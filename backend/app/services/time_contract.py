@@ -1,7 +1,7 @@
 """MVP time contract for scheduling comparisons.
 
 Contract:
-- All scheduling datetime fields — event/blocked-time start_time/end_time,
+- All scheduling datetime fields — event start_time/end_time,
   conflict-check request times, slot-suggestion request times — MUST be naive
   datetimes representing local application time.
 - Timezone-aware datetimes are rejected at the API boundary so that downstream
@@ -13,7 +13,7 @@ Contract:
   because they are bookkeeping fields, not used in scheduling comparisons.
 
 Why naive: the existing scheduling stack — availability windows (datetime.time
-wall-clock), event/blocked-time storage, overlap checks, free-window scanning,
+wall-clock), event storage, overlap checks, free-window scanning,
 slot suggestions, metrics, and triage — all compares naive datetimes today.
 Choosing naive-only keeps the contract consistent with the verified codebase
 without requiring a full timezone refactor.
