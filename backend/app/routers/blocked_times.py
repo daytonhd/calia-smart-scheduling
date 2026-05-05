@@ -1,4 +1,22 @@
-"""CRUD endpoints for blocked times."""
+"""CRUD endpoints for blocked times.
+
+DEPRECATED — TRANSITIONAL LEGACY SUPPORT
+----------------------------------------
+These endpoints (and the underlying ``BlockedTime`` rows) are retained for
+backward compatibility during a transition period. They are no longer driven
+by an active user-facing workflow:
+
+* The user-facing blocked-time workflow is being replaced by categorized
+  events / schedule items, where "blocked" is one category among many.
+* Active scheduling logic should not depend on ``BlockedTime`` as the primary
+  occupied-time model; event-based occupied time plus Daily Rhythm defaults
+  are the authoritative signal.
+* Existing clients can continue to call these routes without breaking, but
+  new scheduling features should not depend on them.
+
+These endpoints will be removed in a future cleanup pass once categorized
+events fully replace the legacy blocked-time concept.
+"""
 
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -14,10 +32,27 @@ from app.services.time_contract import ensure_naive_datetime
 # Single MVP user — auth deferred
 MVP_USER_ID = 1
 
+# All routes in this router are flagged ``deprecated=True`` so they appear as
+# struck-through in the generated OpenAPI / Swagger UI. Active scheduling logic
+# does not depend on them.
 router = APIRouter(prefix="/blocked-times", tags=["blocked-times"])
 
+_DEPRECATION_NOTE = (
+    "**Deprecated — transitional legacy support.** The user-facing blocked-time "
+    "workflow is being replaced by categorized events / schedule items. Active "
+    "scheduling logic does not depend on BlockedTime as the primary occupied-time "
+    "model. This endpoint remains callable for backward compatibility during the "
+    "transition and may be removed in a future release."
+)
 
-@router.post("/", response_model=BlockedTimeRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/",
+    response_model=BlockedTimeRead,
+    status_code=status.HTTP_201_CREATED,
+    deprecated=True,
+    description=_DEPRECATION_NOTE,
+)
 def create_blocked_time(body: BlockedTimeCreate, session: Session = Depends(get_session)):
     blocked = BlockedTime(user_id=MVP_USER_ID, **body.model_dump())
     session.add(blocked)
@@ -26,7 +61,12 @@ def create_blocked_time(body: BlockedTimeCreate, session: Session = Depends(get_
     return blocked
 
 
-@router.get("/", response_model=List[BlockedTimeRead])
+@router.get(
+    "/",
+    response_model=List[BlockedTimeRead],
+    deprecated=True,
+    description=_DEPRECATION_NOTE,
+)
 def list_blocked_times(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
@@ -52,7 +92,12 @@ def list_blocked_times(
     return session.exec(query).all()
 
 
-@router.patch("/{blocked_id}", response_model=BlockedTimeRead)
+@router.patch(
+    "/{blocked_id}",
+    response_model=BlockedTimeRead,
+    deprecated=True,
+    description=_DEPRECATION_NOTE,
+)
 def update_blocked_time(
     blocked_id: int,
     body: BlockedTimeUpdate,
@@ -79,7 +124,12 @@ def update_blocked_time(
     return blocked
 
 
-@router.delete("/{blocked_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{blocked_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    deprecated=True,
+    description=_DEPRECATION_NOTE,
+)
 def delete_blocked_time(blocked_id: int, session: Session = Depends(get_session)):
     blocked = session.get(BlockedTime, blocked_id)
     if not blocked or blocked.user_id != MVP_USER_ID:
