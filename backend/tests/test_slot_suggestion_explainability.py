@@ -1,11 +1,9 @@
 """Tests for explainable SlotSuggestion responses."""
 
-from datetime import date, time
+from datetime import date
 from typing import Optional
 
 from app.services.conflict_detection import find_available_slots
-
-from .factories import make_availability
 
 MONDAY = date(2026, 4, 20)
 
@@ -62,8 +60,6 @@ def test_default_slot_explanations_avoid_legacy_language(session):
 
 
 def test_explanation_is_deterministic(session):
-    make_availability(session, weekday=0, start=time(9, 0), end=time(10, 0))
-
     a = find_available_slots(
         duration_minutes=60,
         start_date=MONDAY,

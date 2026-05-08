@@ -6,7 +6,7 @@ a per-day longest free window. No LLM is involved — all messages are
 formatted from named constants and computed facts.
 
 Free capacity is bounded by Daily Rhythm suggestion hours (see
-app.services.daily_rhythm) — AvailabilityWindow rows are not consulted.
+app.services.daily_rhythm) — legacy availability rows are not consulted.
 Free time is computed by subtracting existing events from the daily
 suggestion window. The endpoint URL and module names retain the
 historical "triage" label for compatibility, but user-facing wording uses

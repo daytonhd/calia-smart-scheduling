@@ -7,12 +7,9 @@ All saved Events count as occupied time. Categorized Events (e.g.
 Unavailable, Commute, Class, Focus block) are the sole occupied-time
 model.
 
-OUTSIDE_AVAILABILITY is no longer an active conflict. Manual event create /
-update is allowed outside AvailabilityWindow rows and outside Daily Rhythm
-hours as long as the range is valid and does not overlap an existing event.
-The legacy _check_availability helper remains in the file as transitional
-internals but is not invoked from any active code path.
-
+Legacy availability-window checks have been removed. Manual event create /
+update is allowed outside Daily Rhythm hours as long as the range is valid
+and does not overlap an existing event.
 Touching boundaries (end_a == start_b) are NOT considered overlap.
 
 Time contract: all datetime arguments must be naive (see
@@ -28,7 +25,6 @@ from typing import List, NamedTuple, Optional, Tuple
 
 from sqlmodel import Session, select
 
-from app.models.availability_window import AvailabilityWindow
 from app.models.event import Event
 from app.schemas.schedule import ConflictDetail, SlotSuggestion
 from app.services.daily_rhythm import get_suggestion_windows_for_range
@@ -41,7 +37,7 @@ class FreeWindow(NamedTuple):
     start_time: datetime
     end_time: datetime
 
-# Single-user MVP — availability windows belong to this user.
+# Single-user MVP user id.
 MVP_USER_ID = 1
 
 # Weekday names for human-readable messages.
@@ -99,66 +95,6 @@ def _check_event_overlap(
         ))
     return details
 
-
-def _check_availability(
-    start_time: datetime,
-    end_time: datetime,
-    session: Session,
-) -> List[ConflictDetail]:
-    """Return a conflict if the proposed time is not fully contained within any
-    active availability window for the event's weekday.
-
-    Availability windows store wall-clock time (no timezone). Both event and
-    window comparisons happen in the same naive local-app-time frame per the
-    MVP time contract.
-
-    Weekday convention: 0=Monday, 6=Sunday (matches Python's datetime.weekday()).
-    """
-    weekday = start_time.weekday()
-    weekday_name = _WEEKDAY_NAMES[weekday]
-    event_start = start_time.time()
-    event_end = end_time.time()
-
-    windows = session.exec(
-        select(AvailabilityWindow).where(
-            AvailabilityWindow.user_id == MVP_USER_ID,
-            AvailabilityWindow.weekday == weekday,
-            AvailabilityWindow.active == True,  # noqa: E712
-        )
-    ).all()
-
-    if not windows:
-        return [
-            ConflictDetail(
-                reason_code="OUTSIDE_AVAILABILITY",
-                conflict_type="availability",
-                message=(
-                    f"This time is outside your active availability window "
-                    f"for {weekday_name}."
-                ),
-                start_time=start_time,
-                end_time=end_time,
-            )
-        ]
-
-    for window in windows:
-        if window.start_time <= event_start and window.end_time >= event_end:
-            return []  # Fully contained within this window — no conflict
-
-    return [
-        ConflictDetail(
-            reason_code="OUTSIDE_AVAILABILITY",
-            conflict_type="availability",
-            message=(
-                f"This time is outside your active availability window "
-                f"for {weekday_name}."
-            ),
-            start_time=start_time,
-            end_time=end_time,
-        )
-    ]
-
-
 def check_all_conflicts(
     start_time: datetime,
     end_time: datetime,
@@ -170,11 +106,9 @@ def check_all_conflicts(
     Active checks:
       1. EVENT_OVERLAP — proposed time overlaps an existing event
 
-    OUTSIDE_AVAILABILITY is no longer an active conflict. Manual events
-    outside AvailabilityWindow rows or outside Daily Rhythm hours are
-    allowed as long as they have a valid range and do not overlap an
-    existing event. The legacy _check_availability helper is retained for
-    now but is not invoked here.
+    Legacy availability-window checks have been removed. Manual events
+    outside Daily Rhythm hours are allowed as long as they have a valid
+    range and do not overlap an existing event.
 
     Args:
         start_time:        Proposed event start (naive datetime).
@@ -233,12 +167,10 @@ def find_free_windows(
 ) -> List[FreeWindow]:
     """Return maximal free intervals across [start_date, end_date].
 
-    Driven by Daily Rhythm suggestion hours — AvailabilityWindow rows are not
-    consulted here. For each day in the range:
-      1. Build the daily suggestion window (DEFAULT_SUGGESTIONS_START–_END).
-      2. Collect existing events that overlap that window.
-      3. Subtract the union of event intervals and emit the remaining free
-         sub-intervals.
+    Driven by Daily Rhythm suggestion hours. For each day in the range,
+    the service builds the daily suggestion window, collects overlapping
+    events, subtracts occupied intervals, and returns the remaining free
+    intervals.
 
     This is a reusable lower-level helper — slot-fitting and triage logic
     layer on top by walking the returned windows. It does not enforce any
@@ -277,10 +209,9 @@ def find_available_slots(
     exclude_event_id: Optional[int] = None,
 ) -> List[SlotSuggestion]:
     """Return up to max_results conflict-free slots of the requested duration.
-
-    Scans each day's Daily Rhythm suggestion window (8 AM–9 PM by default) in
-    30-minute increments. AvailabilityWindow rows are not consulted — the
-    Daily Rhythm window is the single source of truth for which hours we
+    
+    Scans each day's Daily Rhythm suggestion window in 30-minute increments.
+    The Daily Rhythm window is the single source of truth for which hours we
     suggest in. A candidate slot is valid when it does not overlap any
     existing event.
 

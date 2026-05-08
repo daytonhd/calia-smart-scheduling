@@ -1,10 +1,10 @@
 """Tests for compute_weekly_metrics."""
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from app.services.metrics import compute_weekly_metrics, monday_of
 
-from .factories import make_availability, make_calendar, make_event
+from .factories import make_calendar, make_event
 
 # Week of Monday 2026-04-20 → Sunday 2026-04-26.
 MONDAY = date(2026, 4, 20)
@@ -89,37 +89,10 @@ def test_interval_is_clipped_to_week_boundary(session):
     assert m["busiest_day_minutes"] == 60
 
 
-def test_metrics_do_not_require_availability_window_rows(session):
-    """Metrics must compute correctly with zero AvailabilityWindow rows
-    (the post-Daily-Rhythm baseline) — counts are derived from events alone."""
+def test_metrics_compute_with_no_availability_setup(session):
+    """Metrics must compute correctly without any availability setup —
+    counts are derived from events alone (Daily Rhythm baseline)."""
     cal = make_calendar(session)
-    make_event(
-        session, cal.id,
-        start=datetime(2026, 4, 20, 9, 0),
-        end=datetime(2026, 4, 20, 10, 0),
-    )
-
-    m = compute_weekly_metrics(session, week_start=MONDAY)
-
-    assert m["total_events"] == 1
-    assert m["total_scheduled_minutes"] == 60
-    assert m["busiest_day"] == date(2026, 4, 20)
-    assert m["busiest_day_minutes"] == 60
-
-
-def test_metrics_ignore_availability_window_rows(session):
-    """AvailabilityWindow rows are legacy and must not influence metrics —
-    adding or removing them does not change totals or busiest day."""
-    cal = make_calendar(session)
-    # Add an AvailabilityWindow row that does NOT cover the event time.
-    # If metrics depended on AvailabilityWindow, the event would be excluded.
-    make_availability(
-        session,
-        weekday=0,  # Monday
-        start=time(13, 0),
-        end=time(17, 0),
-    )
-    # Event at 09:00–10:00 Monday — outside the AvailabilityWindow above.
     make_event(
         session, cal.id,
         start=datetime(2026, 4, 20, 9, 0),
