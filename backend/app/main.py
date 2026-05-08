@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.routers import calendars, events
-from app.routers import availability
 from app.routers import schedule
 
 app = FastAPI(
@@ -22,7 +21,6 @@ app.add_middleware(
 
 app.include_router(calendars.router)
 app.include_router(events.router)
-app.include_router(availability.router)
 app.include_router(schedule.router)
 
 
