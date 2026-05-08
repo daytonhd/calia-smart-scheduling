@@ -39,9 +39,7 @@ class ConflictDetail(SQLModel):
 
     reason_code is a stable machine identifier. Active codes are
     EVENT_OVERLAP; INVALID_TIME_RANGE may be surfaced from input
-    validation. OUTSIDE_AVAILABILITY is retained as a schema constant
-    for backward compatibility but is no longer returned from active
-    conflict checks.
+    validation.
     message is a deterministic backend-formatted human-readable string
     that references existing events / occupied schedule items.
     conflict_type is the high-level category ("event", "input") — these
