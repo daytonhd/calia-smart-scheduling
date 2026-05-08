@@ -1,11 +1,10 @@
 """Tests for find_available_slots — the slot-suggestion engine.
 
 Slot suggestions are now driven by Daily Rhythm suggestion hours
-(8:00–21:00 by default). AvailabilityWindow rows are not consulted; slots
-must avoid existing events.
+(8:00–21:00 by default). Slots must avoid existing events.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from app.services.conflict_detection import find_available_slots
 from app.services.daily_rhythm import (
@@ -14,7 +13,6 @@ from app.services.daily_rhythm import (
 )
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
@@ -24,8 +22,8 @@ TUESDAY = date(2026, 4, 21)
 SUNDAY = date(2026, 4, 26)  # weekday = 6
 
 
-def test_returns_slots_with_no_availability_window_rows(session):
-    """Slot suggestions work even when there are zero AvailabilityWindow rows."""
+def test_returns_slots_with_no_setup(session):
+    """Slot suggestions work with no events or other setup."""
     slots = find_available_slots(
         duration_minutes=60,
         start_date=MONDAY,
@@ -196,25 +194,6 @@ def test_duration_longer_than_rhythm_window_returns_empty(session):
         session=session,
     )
     assert slots == []
-
-
-def test_inactive_availability_window_does_not_suppress_slots(session):
-    """AvailabilityWindow rows (active or inactive) do not affect slot output."""
-    make_availability(
-        session, weekday=0, start=time(9, 0), end=time(17, 0), active=False
-    )
-
-    slots = find_available_slots(
-        duration_minutes=60,
-        start_date=MONDAY,
-        end_date=MONDAY,
-        max_results=5,
-        session=session,
-    )
-
-    # Daily Rhythm drives output even when avail rows exist or are inactive.
-    assert len(slots) == 5
-    assert slots[0].start_time == datetime(2026, 4, 20, 8, 0)
 
 
 def test_scans_each_day_in_range(session):

@@ -1,13 +1,12 @@
-"""Batch 2 contract tests: events outside AvailabilityWindow rows or
-outside Daily Rhythm hours are allowed if the range is valid and there
-is no overlap. POST /schedule/check-conflict no longer returns
-OUTSIDE_AVAILABILITY.
+"""Batch 2 contract tests: events outside Daily Rhythm hours are allowed
+if the range is valid and there is no overlap. POST /schedule/check-conflict
+no longer returns OUTSIDE_AVAILABILITY.
 
 These tests pin the new conflict semantics introduced in Batch 2 so future
 changes can't silently regress.
 """
 
-from datetime import datetime, time
+from datetime import datetime
 
 import pytest
 from fastapi import HTTPException
@@ -18,18 +17,17 @@ from app.routers.schedule import check_conflict
 from app.schemas.event import EventCreate, EventUpdate
 from app.schemas.schedule import ConflictCheckRequest
 
-from .factories import make_availability, make_calendar, make_event
+from .factories import make_calendar, make_event
 
 
 # ---------------------------------------------------------------------------
-# POST /events outside availability is allowed
+# POST /events outside Daily Rhythm hours is allowed
 # ---------------------------------------------------------------------------
 
 
-def test_post_events_allows_outside_availability_window_rows(session):
-    """An event placed outside the only AvailabilityWindow row succeeds."""
+def test_post_events_allows_outside_daily_rhythm_hours(session):
+    """An event placed outside Daily Rhythm hours succeeds."""
     cal = make_calendar(session)
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
 
     body = EventCreate(
         calendar_id=cal.id,
@@ -45,8 +43,8 @@ def test_post_events_allows_outside_availability_window_rows(session):
     assert event.end_time == datetime(2026, 4, 20, 23, 0)
 
 
-def test_post_events_allows_when_no_availability_rows_exist(session):
-    """No AvailabilityWindow rows at all → event create still succeeds."""
+def test_post_events_allows_outside_daily_rhythm_extreme_hours(session):
+    """Event create still succeeds outside Daily Rhythm hours."""
     cal = make_calendar(session)
 
     body = EventCreate(
@@ -61,14 +59,13 @@ def test_post_events_allows_when_no_availability_rows_exist(session):
 
 
 # ---------------------------------------------------------------------------
-# PATCH /events outside availability is allowed
+# PATCH /events outside Daily Rhythm is allowed
 # ---------------------------------------------------------------------------
 
 
-def test_patch_events_allows_move_outside_availability_window_rows(session):
-    """Moving an event outside availability rows is allowed when no overlap."""
+def test_patch_events_allows_move_outside_daily_rhythm_hours(session):
+    """Moving an event outside Daily Rhythm hours is allowed when no overlap."""
     cal = make_calendar(session)
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
     ev = make_event(
         session, cal.id,
         start=datetime(2026, 4, 20, 10, 0),
@@ -91,9 +88,8 @@ def test_patch_events_allows_move_outside_availability_window_rows(session):
 
 
 def test_check_conflict_does_not_return_outside_availability(session):
-    """Outside-availability placements produce no conflicts at the router."""
+    """Outside-Daily-Rhythm placements produce no conflicts at the router."""
     cal = make_calendar(session)
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
 
     body = ConflictCheckRequest(
         calendar_id=cal.id,
@@ -109,8 +105,8 @@ def test_check_conflict_does_not_return_outside_availability(session):
     assert "OUTSIDE_AVAILABILITY" not in codes
 
 
-def test_check_conflict_no_availability_rows_returns_clean(session):
-    """With no AvailabilityWindow rows at all, the placement is clean."""
+def test_check_conflict_no_setup_returns_clean(session):
+    """With no events at all, the placement is clean."""
     cal = make_calendar(session)
 
     body = ConflictCheckRequest(

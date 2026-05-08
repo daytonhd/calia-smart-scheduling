@@ -3,7 +3,7 @@
 Anchor week: Monday 2026-04-20 → Sunday 2026-04-26.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from app.services.triage import (
     FRAGMENTED_DAY_FREE_WINDOW_MAX,
@@ -13,19 +13,12 @@ from app.services.triage import (
 )
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
 
 MONDAY = date(2026, 4, 20)
 SUNDAY = date(2026, 4, 26)
-
-
-def _full_week_availability(session, start=time(9, 0), end=time(17, 0)):
-    """9-5 every weekday (Mon-Fri)."""
-    for wd in range(5):
-        make_availability(session, weekday=wd, start=start, end=end)
 
 
 def _day(triage, d: date):
@@ -57,7 +50,6 @@ def test_empty_low_data_week_is_clean(session):
 
 def test_overloaded_day_detection(session):
     """6h+ scheduled on Monday → OVERLOADED_DAY warning."""
-    _full_week_availability(session)
     cal = make_calendar(session)
     # 6 hours of scheduled events on Monday: 9-12 and 13-16 (6h total)
     make_event(session, cal.id,
@@ -78,7 +70,6 @@ def test_overloaded_day_detection(session):
 
 def test_overloaded_uses_events_only(session):
     """Multiple events hitting the threshold trigger overload."""
-    _full_week_availability(session)
     cal = make_calendar(session)
     make_event(session, cal.id,
                start=datetime(2026, 4, 20, 9, 0),
@@ -97,7 +88,6 @@ def test_overloaded_uses_events_only(session):
 
 def test_fragmented_day_detection(session):
     """3+ free windows shorter than the small-window threshold → FRAGMENTED_DAY."""
-    _full_week_availability(session)
     cal = make_calendar(session)
     # In a 9-5 (480 min) window, place events to leave 4 small free gaps:
     # free: 9:00-9:30 (30), 10:00-10:30 (30), 11:00-11:30 (30), 12:00-12:30 (30),
@@ -172,7 +162,6 @@ def test_unscheduled_day_not_flagged_weak_buffer(session):
 
 def test_busy_minutes_clipped_to_day_boundary(session):
     """Cross-midnight events should attribute minutes to each day."""
-    _full_week_availability(session)
     cal = make_calendar(session)
     # Mon 23:00 → Tue 02:00 (3h total: 60 min Monday, 120 min Tuesday)
     make_event(session, cal.id,

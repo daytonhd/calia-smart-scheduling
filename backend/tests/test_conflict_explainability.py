@@ -5,23 +5,17 @@ conflict_type, start_time, end_time, related_event_id) and that multiple
 event conflicts are returned together.
 """
 
-from datetime import datetime, time
+from datetime import datetime
 
 from app.services.conflict_detection import check_all_conflicts
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
 
 
-def _monday_availability(session):
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
-
-
 def test_event_overlap_detail_has_event_id_and_human_message(session):
-    _monday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session,
@@ -90,7 +84,6 @@ def test_returns_all_overlapping_events(session):
 
 def test_messages_are_deterministic(session):
     """Identical inputs produce identical messages — no nondeterministic content."""
-    _monday_availability(session)
     cal = make_calendar(session)
     make_event(
         session,

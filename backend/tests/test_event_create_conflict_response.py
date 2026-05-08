@@ -16,7 +16,7 @@ dependency) and verify two things:
 """
 
 import json
-from datetime import datetime, time
+from datetime import datetime
 
 import pytest
 from fastapi import HTTPException
@@ -24,16 +24,13 @@ from fastapi import HTTPException
 from app.routers.events import create_event, update_event
 from app.schemas.event import EventCreate, EventUpdate
 
-from .factories import make_availability, make_calendar, make_event
+from .factories import make_calendar, make_event
 
 
-def test_create_event_outside_availability_now_succeeds(session):
-    """Events outside AvailabilityWindow rows are no longer rejected — a
+def test_create_event_outside_daily_rhythm_now_succeeds(session):
+    """Events outside Daily Rhythm hours are no longer rejected — a
     valid late-night create with no overlap should succeed."""
     cal = make_calendar(session)
-    # Narrow availability window — the 22:00-23:00 placement falls outside it,
-    # but availability is no longer enforced.
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
 
     body = EventCreate(
         calendar_id=cal.id,
@@ -51,7 +48,6 @@ def test_create_event_outside_availability_now_succeeds(session):
 
 def test_create_event_overlap_returns_serializable_409(session):
     cal = make_calendar(session)
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
     existing = make_event(
         session,
         cal.id,
@@ -86,7 +82,6 @@ def test_create_event_overlap_returns_serializable_409(session):
 
 def test_update_event_into_conflict_returns_serializable_409(session):
     cal = make_calendar(session)
-    make_availability(session, weekday=0, start=time(9, 0), end=time(17, 0))
     blocker = make_event(
         session,
         cal.id,

@@ -8,7 +8,6 @@ from datetime import datetime, time
 
 from sqlmodel import Session
 
-from app.models.availability_window import AvailabilityWindow
 from app.models.calendar import Calendar
 from app.models.event import Event
 from app.services.conflict_detection import MVP_USER_ID
@@ -34,24 +33,3 @@ def make_event(
     session.commit()
     session.refresh(ev)
     return ev
-
-
-def make_availability(
-    session: Session,
-    weekday: int,
-    start: time,
-    end: time,
-    active: bool = True,
-    user_id: int = MVP_USER_ID,
-) -> AvailabilityWindow:
-    aw = AvailabilityWindow(
-        user_id=user_id,
-        weekday=weekday,
-        start_time=start,
-        end_time=end,
-        active=active,
-    )
-    session.add(aw)
-    session.commit()
-    session.refresh(aw)
-    return aw

@@ -3,12 +3,11 @@
 Anchor week: Monday 2026-04-20 → Sunday 2026-04-26.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from app.services.rescheduling import find_replacement_slots
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
@@ -17,14 +16,7 @@ MONDAY = date(2026, 4, 20)
 TUESDAY = date(2026, 4, 21)
 
 
-def _weekday_availability(session, start=time(9, 0), end=time(17, 0)):
-    """Mon–Fri availability."""
-    for wd in range(5):
-        make_availability(session, weekday=wd, start=start, end=end)
-
-
 def test_returns_none_for_missing_event(session):
-    _weekday_availability(session)
     result = find_replacement_slots(
         event_id=9999,
         search_start=datetime(2026, 4, 20, 9, 0),
@@ -37,7 +29,6 @@ def test_returns_none_for_missing_event(session):
 
 def test_ignores_self_during_overlap_check(session):
     """The selected event must not block its own time slot."""
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -60,7 +51,6 @@ def test_ignores_self_during_overlap_check(session):
 
 
 def test_preserves_event_duration(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -82,7 +72,6 @@ def test_preserves_event_duration(session):
 
 
 def test_avoids_other_events(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -116,7 +105,6 @@ def test_avoids_other_occupied_events(session):
 
     All occupied time is represented as Events with categories.
     """
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -178,7 +166,6 @@ def test_options_stay_within_daily_rhythm_hours(session):
 
 def test_same_day_options_rank_first(session):
     """Same-day candidates should appear before later-day candidates."""
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -209,7 +196,6 @@ def test_same_day_options_rank_first(session):
 
 def test_returns_empty_when_no_valid_replacement(session):
     """Search range fully occupied by events → no options."""
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -255,7 +241,6 @@ def test_returns_empty_when_no_valid_replacement(session):
 
 
 def test_options_include_explainability_fields(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,
@@ -292,7 +277,6 @@ def test_options_include_explainability_fields(session):
 
 
 def test_max_results_respected(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
     ev = make_event(
         session, cal.id,

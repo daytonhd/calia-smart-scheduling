@@ -41,7 +41,7 @@ def check_conflict(
     """Check whether a proposed event placement has any scheduling conflicts.
 
     Returns all detected conflicts. The active conflict type is event
-    overlap. Placements outside AvailabilityWindow rows or outside Daily
+    overlap. Placements outside Daily
     Rhythm hours are NOT flagged here. An empty conflicts list means the
     placement is clean.
     """
@@ -110,7 +110,7 @@ def reschedule_options(
 
     Candidate slots are scanned inside Daily Rhythm suggestion hours
     (8 AM–9 PM), preserve the event's duration, and avoid existing events
-    and other occupied schedule items. AvailabilityWindow rows are not
+    and other occupied schedule items. legacy availability rows are not
     consulted. The target event is excluded from event-overlap checks.
     Does NOT modify the event.
 
@@ -143,7 +143,7 @@ def proposed_reschedule_options(
     409 conflict). Candidate slots are scanned inside Daily Rhythm
     suggestion hours (8 AM–9 PM), preserve the duration derived from the
     proposed start/end, and avoid existing events and other occupied
-    schedule items. AvailabilityWindow rows are not consulted. The
+    schedule items. legacy availability rows are not consulted. The
     proposed event is NOT persisted — callers receive candidate options
     only and must still issue a POST /events/ to save.
 
@@ -180,7 +180,7 @@ def weekly_triage(
     Surfaces overloaded days, fragmented days, weak buffer capacity, and
     the longest free window per day. Free Capacity is bounded by Daily
     Rhythm suggestion hours and computed by subtracting existing events
-    and other occupied schedule items. AvailabilityWindow rows are not
+    and other occupied schedule items. legacy availability rows are not
     consulted — no LLM, no new tables.
     """
     anchor = week_start or date.today()

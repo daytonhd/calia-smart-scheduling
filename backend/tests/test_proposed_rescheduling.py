@@ -4,7 +4,7 @@ POST /schedule/proposed-reschedule-options endpoint.
 Anchor week: Monday 2026-04-20 → Sunday 2026-04-26.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 import pytest
 from fastapi import HTTPException
@@ -15,18 +15,11 @@ from app.schemas.schedule import ProposedRescheduleOptionsRequest
 from app.services.rescheduling import find_replacement_slots_for_proposed
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
 
 MONDAY = date(2026, 4, 20)
-
-
-def _weekday_availability(session, start=time(9, 0), end=time(17, 0)):
-    """Mon–Fri availability."""
-    for wd in range(5):
-        make_availability(session, weekday=wd, start=start, end=end)
 
 
 # ---------------------------------------------------------------------------
@@ -35,8 +28,6 @@ def _weekday_availability(session, start=time(9, 0), end=time(17, 0)):
 
 
 def test_returns_ranked_options_for_proposed_event(session):
-    _weekday_availability(session)
-
     result = find_replacement_slots_for_proposed(
         title="Study block",
         start_time=datetime(2026, 4, 20, 14, 0),
@@ -65,8 +56,6 @@ def test_returns_ranked_options_for_proposed_event(session):
 
 
 def test_proposed_duration_is_preserved_in_every_option(session):
-    _weekday_availability(session)
-
     result = find_replacement_slots_for_proposed(
         title="Long block",
         start_time=datetime(2026, 4, 20, 13, 0),
@@ -83,7 +72,6 @@ def test_proposed_duration_is_preserved_in_every_option(session):
 
 
 def test_excludes_existing_events_from_proposed_suggestions(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
     # Existing event blocks 13:00-14:00.
     make_event(
@@ -113,7 +101,6 @@ def test_excludes_existing_events_from_proposed_suggestions(session):
 def test_excludes_other_occupied_events_from_proposed_suggestions(session):
     """Proposed-event suggestions avoid time occupied by other events
     (categorized events are the sole occupied-time model)."""
-    _weekday_availability(session)
     cal = make_calendar(session)
     make_event(
         session, cal.id,
@@ -166,8 +153,6 @@ def test_proposed_suggestions_stay_inside_daily_rhythm(session):
 
 
 def test_max_results_respected_for_proposed(session):
-    _weekday_availability(session)
-
     result = find_replacement_slots_for_proposed(
         title="Proposed",
         start_time=datetime(2026, 4, 20, 10, 0),
@@ -182,8 +167,6 @@ def test_max_results_respected_for_proposed(session):
 
 
 def test_proposed_same_day_options_rank_first(session):
-    _weekday_availability(session)
-
     result = find_replacement_slots_for_proposed(
         title="Proposed",
         start_time=datetime(2026, 4, 20, 10, 0),
@@ -204,8 +187,6 @@ def test_proposed_same_day_options_rank_first(session):
 
 
 def test_proposed_minutes_from_original_start_is_signed(session):
-    _weekday_availability(session)
-
     result = find_replacement_slots_for_proposed(
         title="Proposed",
         start_time=datetime(2026, 4, 20, 12, 0),
@@ -273,7 +254,6 @@ def test_schema_rejects_max_results_below_one():
 
 
 def test_route_returns_404_for_unknown_calendar(session):
-    _weekday_availability(session)
     body = ProposedRescheduleOptionsRequest(
         calendar_id=9999,
         title="X",
@@ -292,7 +272,6 @@ def test_route_returns_404_for_unknown_calendar(session):
 
 
 def test_route_returns_options_for_valid_calendar(session):
-    _weekday_availability(session)
     cal = make_calendar(session)
 
     body = ProposedRescheduleOptionsRequest(

@@ -1,9 +1,8 @@
 """Tests for the free-window scanning helper.
 
 Free-window output is now driven by Daily Rhythm suggestion hours
-(8:00–21:00 by default) rather than AvailabilityWindow rows. Each day in
-the requested range emits one suggestion window minus any overlapping
-events.
+(8:00–21:00 by default). Each day in the requested range emits one
+suggestion window minus any overlapping events.
 """
 
 from datetime import date, datetime
@@ -15,7 +14,6 @@ from app.services.daily_rhythm import (
 )
 
 from .factories import (
-    make_availability,
     make_calendar,
     make_event,
 )
@@ -33,22 +31,7 @@ def _rhythm_end(d: date) -> datetime:
 
 
 def test_no_data_returns_full_daily_rhythm_window(session):
-    """With no events and no AvailabilityWindow rows, the full
-    Daily Rhythm window for each day is free."""
-    windows = find_free_windows(MONDAY, MONDAY, session)
-
-    assert len(windows) == 1
-    assert windows[0].start_time == _rhythm_start(MONDAY)
-    assert windows[0].end_time == _rhythm_end(MONDAY)
-
-
-def test_availability_window_rows_are_ignored(session):
-    """AvailabilityWindow rows must not constrain free-window output."""
-    # A narrow availability row should not narrow the result — the Daily
-    # Rhythm window is the source of truth.
-    from datetime import time
-    make_availability(session, weekday=0, start=time(9, 0), end=time(11, 0))
-
+    """With no events, the full Daily Rhythm window for each day is free."""
     windows = find_free_windows(MONDAY, MONDAY, session)
 
     assert len(windows) == 1
