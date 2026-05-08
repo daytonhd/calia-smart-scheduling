@@ -53,30 +53,6 @@ export interface EventUpdate {
   end_time?: string;
 }
 
-export interface AvailabilityWindow {
-  id: number;
-  user_id: number;
-  weekday: number;     // 0 = Monday … 6 = Sunday
-  start_time: string;  // "HH:MM:SS"
-  end_time: string;    // "HH:MM:SS"
-  active: boolean;
-  created_at: string;
-}
-
-export interface AvailabilityWindowCreate {
-  weekday: number;
-  start_time: string;  // "HH:MM" or "HH:MM:SS"
-  end_time: string;
-  active?: boolean;
-}
-
-export interface AvailabilityWindowUpdate {
-  weekday?: number;
-  start_time?: string;
-  end_time?: string;
-  active?: boolean;
-}
-
 export interface ScheduleSummary {
   id: number;
   user_id: number;
