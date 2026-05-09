@@ -4,7 +4,10 @@ export default function HomePage() {
   return (
     <section>
       <h2>Welcome</h2>
-      <p>Frontend shell for the Smart Scheduling MVP.</p>
+      <p>
+        Calia helps you manage events, find open time, and understand your
+        weekly schedule balance.
+      </p>
       <ul>
         <li>
           <Link href="/dashboard">Dashboard</Link> — weekly overview, today,

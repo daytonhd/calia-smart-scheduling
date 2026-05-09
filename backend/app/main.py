@@ -6,7 +6,7 @@ from app.routers import calendars, events
 from app.routers import schedule
 
 app = FastAPI(
-    title="Smart Scheduling API",
+    title="Calia API",
     version="0.1.0",
 )
 
