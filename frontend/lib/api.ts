@@ -1,4 +1,4 @@
-// Thin fetch layer for the Smart Scheduling backend.
+// Thin fetch layer for the Calia backend.
 // Exposes small helpers per resource. No heavy abstractions.
 
 import { API_BASE_URL } from "./config";
