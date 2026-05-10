@@ -92,6 +92,7 @@ a:hover {
 
 .app-nav a.active {
   color: var(--accent);
+  font-weight: 600;
 }
 
 .app-nav a.active::after {
@@ -99,7 +100,7 @@ a:hover {
   position: absolute;
   left: 0.85rem;
   right: 0.85rem;
-  bottom: -0.6rem;
+  bottom: -0.65rem;
   height: 2px;
   background: var(--accent);
   border-radius: 2px 2px 0 0;
@@ -113,7 +114,7 @@ a:hover {
 
 /* ---------- Headings & helpers ---------- */
 .page-header {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 1.75rem 0;
 }
 
 .page-title {
@@ -145,17 +146,17 @@ a:hover {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  padding: 1.25rem 1.4rem;
+  padding: 1.4rem 1.5rem;
   box-shadow: var(--shadow-card);
 }
 
 .card-title {
-  margin: 0 0 0.85rem 0;
+  margin: 0 0 1rem 0;
   font-family: var(--font-serif);
-  font-size: 1.35rem;
+  font-size: 1.5rem;
   font-weight: 500;
   color: var(--fg);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
 }
 
 .card-section+.card-section {
@@ -177,9 +178,11 @@ a:hover {
 }
 
 .sidebar-card-title {
-  margin: 0 0 0.75rem 0;
-  font-size: 1rem;
-  font-weight: 600;
+  margin: 0 0 0.85rem 0;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--fg);
   display: flex;
   justify-content: space-between;
@@ -196,26 +199,27 @@ a:hover {
 .overview-card {
   display: flex;
   align-items: flex-start;
-  gap: 1.1rem;
-  padding: 1.25rem 1.4rem;
-  background: var(--card-bg);
+  gap: 1.25rem;
+  padding: 1.5rem 1.6rem;
+  background: linear-gradient(180deg, #fdfcfa 0%, var(--card-bg) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .overview-icon {
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
+  box-shadow: inset 0 0 0 1px #e2ecf8;
 }
 
 .overview-content {
@@ -224,9 +228,11 @@ a:hover {
 }
 
 .overview-title {
-  margin: 0 0 0.2rem 0;
-  font-size: 1rem;
-  font-weight: 600;
+  margin: 0 0 0.35rem 0;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--fg);
 }
 
@@ -235,10 +241,12 @@ a:hover {
   color: var(--fg-soft);
   white-space: pre-wrap;
   font-size: 0.95rem;
+  line-height: 1.55;
+  max-width: 64ch;
 }
 
 .overview-meta {
-  margin-top: 0.4rem;
+  margin-top: 0.55rem;
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -359,19 +367,29 @@ a:hover {
 
 /* Empty state inside cards */
 .empty-state {
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 1.2rem;
+  padding: 1.25rem 1.1rem;
   text-align: center;
   color: var(--muted);
   background: var(--bg);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .empty-state-strong {
   display: block;
   color: var(--fg-soft);
   font-weight: 600;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.92rem;
+}
+
+/* Softer variant — used inside sidebar cards where we don't want a second visible card outline. */
+.empty-state.empty-state-soft {
+  border: none;
+  background: transparent;
+  padding: 0.85rem 0.25rem 0.25rem;
 }
 
 /* ---------- Sidebar list rows ---------- */
@@ -1556,15 +1574,15 @@ button:disabled {
 
 .capacity-track {
   position: relative;
-  height: 0.45rem;
-  background: var(--accent-softer);
+  height: 0.4rem;
+  background: #eef2f8;
   border-radius: 999px;
   overflow: hidden;
 }
 
 .capacity-fill {
   height: 100%;
-  background: var(--accent);
+  background: #8aa9e0;
   border-radius: 999px;
   transition: width 200ms ease;
 }
@@ -1588,7 +1606,7 @@ button:disabled {
   display: grid;
   grid-template-columns: 1.3rem 1fr;
   gap: 0.4rem;
-  height: 6.5rem;
+  height: 10.5rem;
 }
 
 .load-yaxis {
@@ -1672,15 +1690,15 @@ button:disabled {
 
 /* ---- Bottom strip: gradient + interpretation ---- */
 .balance-bottom {
-  margin-top: 1rem;
+  margin-top: 1.1rem;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 1.5rem;
   align-items: center;
-  padding: 0.9rem 1rem;
+  padding: 1.25rem 1.25rem;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--bg);
+  background: #fcfbf8;
 }
 
 @media (max-width: 720px) {
@@ -1730,9 +1748,11 @@ button:disabled {
 
 .balance-interpretation-label {
   font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-size: 1.7rem;
   font-weight: 500;
-  margin-bottom: 0.25rem;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  margin-bottom: 0.4rem;
   color: var(--fg);
 }
 
