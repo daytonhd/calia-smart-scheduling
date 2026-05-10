@@ -71,14 +71,6 @@ function upcomingWindowIso(): { start: string; end: string } {
   return { start: naiveLocalIso(start), end: naiveLocalIso(end) };
 }
 
-function todayLabel(): string {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 // ----- Schedule Balance helpers -----
 
 // Daily Rhythm suggestion window upper bound used for visual scaling.
@@ -208,13 +200,6 @@ export default function DashboardPage() {
 
   return (
     <section>
-      <header className="page-header">
-        <h2 className="page-title">Dashboard</h2>
-        <p className="page-subtitle">
-          {todayLabel()} · your week at a glance
-        </p>
-      </header>
-
       {error && (
         <div className="error-box" role="alert">
           Failed to load dashboard: {error}
@@ -242,8 +227,8 @@ export default function DashboardPage() {
                 </>
               ) : (
                 <p className="overview-text muted">
-                  No saved weekly summary yet. Once one is generated it will
-                  appear here.
+                  Generate a weekly summary to see the main patterns, busiest
+                  days, and open capacity for this week.
                 </p>
               )}
             </div>
@@ -261,9 +246,10 @@ export default function DashboardPage() {
                 {!balance || balance.days.length === 0 ? (
                   <div className="empty-state">
                     <span className="empty-state-strong">
-                      No schedule data yet
+                      Your week is wide open
                     </span>
-                    Add events to see how balanced your week is.
+                    Once events are added, you&rsquo;ll see how the load is
+                    distributed across the week.
                   </div>
                 ) : (
                   (() => {
@@ -304,14 +290,15 @@ export default function DashboardPage() {
                                 Free Capacity
                               </h4>
                               <p className="balance-subcard-sub">
-                                Open time within suggestion hours
+                                Longest open window each day
                               </p>
                             </div>
                             <div className="capacity-bars">
                               {balance.days.map((d) => {
                                 const pct = Math.min(
                                   100,
-                                  (d.free_minutes / BALANCE_SCALE_MAX_MIN) *
+                                  (d.longest_free_window_minutes /
+                                    BALANCE_SCALE_MAX_MIN) *
                                     100
                                 );
                                 const tight =
@@ -476,11 +463,11 @@ export default function DashboardPage() {
                     </div>
 
                     {upcomingEvents.length === 0 ? (
-                      <div className="empty-state">
+                      <div className="empty-state empty-state-soft">
                         <span className="empty-state-strong">
-                          No upcoming events
+                          Nothing on the horizon
                         </span>
-                        Nothing scheduled in the next 7 days.
+                        The next seven days are clear.
                       </div>
                     ) : (
                       <ul className="list-rows">
@@ -507,7 +494,7 @@ export default function DashboardPage() {
                 );
               })()}
 
-              {/* Daily Rhythm — frontend MVP defaults; no backend endpoint yet. */}
+              {/* Daily Rhythm */}
               <div className="sidebar-card rhythm-card">
                 <div className="sidebar-card-title">
                   <span>Daily Rhythm</span>
@@ -518,7 +505,7 @@ export default function DashboardPage() {
                     <span className="rhythm-value">7:00 AM – 11:00 PM</span>
                   </div>
                   <div className="rhythm-row">
-                    <span className="rhythm-label">Suggestions use</span>
+                    <span className="rhythm-label">Suggestion window</span>
                     <span className="rhythm-value">8:00 AM – 9:00 PM</span>
                   </div>
                 </div>
@@ -529,9 +516,6 @@ export default function DashboardPage() {
                 >
                   Edit rhythm
                 </Link>
-                <p className="rhythm-note muted small">
-                  Using MVP defaults.
-                </p>
               </div>
             </aside>
           </div>
