@@ -28,16 +28,20 @@ function toDateInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Default range: current week starting Monday, 7 days.
+// The grid is always a 7-day week. `appliedEnd` is treated as the
+// exclusive upper bound (start + WEEK_DAYS) — the day after the last
+// visible column.
+const WEEK_DAYS = 7;
+
+// Default range: current week starting Monday, exclusive end (= Mon + 7).
 function defaultRange(): { start: string; end: string } {
   const now = new Date();
   const dow = now.getDay(); // 0=Sun..6=Sat
   // Treat Monday as week start.
   const offsetToMonday = (dow + 6) % 7;
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offsetToMonday);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return { start: toDateInput(start), end: toDateInput(end) };
+  const startStr = toDateInput(start);
+  return { start: startStr, end: shiftDateInput(startStr, WEEK_DAYS) };
 }
 
 // MVP time contract: backend rejects timezone-aware datetimes. Send naive
@@ -143,6 +147,24 @@ function buildDayKeys(startInput: string, endInput: string): string[] {
   return out;
 }
 
+// Always return exactly WEEK_DAYS day-keys starting from `startInput`.
+// The grid is a fixed 7-day week — drift in `appliedEnd` must never
+// change the column count.
+function buildWeekDayKeys(startInput: string): string[] {
+  const [y, m, d] = startInput.split("-").map(Number);
+  const cursor = new Date(y, (m ?? 1) - 1, d ?? 1);
+  const out: string[] = [];
+  for (let i = 0; i < WEEK_DAYS; i++) {
+    out.push(
+      `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(
+        cursor.getDate()
+      )}`
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
 function dayKeyOf(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -173,8 +195,8 @@ function dayHeaderParts(key: string): { weekday: string; daynum: string } {
 }
 
 // Calendar grid layout constants.
-const VISIBLE_START_HOUR = 8; // 8 AM
-const VISIBLE_END_HOUR = 18; // 6 PM (exclusive bottom)
+const VISIBLE_START_HOUR = 7; // 7 AM
+const VISIBLE_END_HOUR = 22; // 10 PM (exclusive bottom)
 const VISIBLE_HOURS = VISIBLE_END_HOUR - VISIBLE_START_HOUR;
 const HOUR_HEIGHT = 56; // px per hour
 const GRID_HEIGHT = VISIBLE_HOURS * HOUR_HEIGHT;
@@ -341,7 +363,8 @@ export default function SchedulePage() {
     setError(null);
     try {
       const startIso = dateInputToNaiveStart(start);
-      const endIso = dateInputToNaiveEndExclusive(end);
+      // `end` is already the exclusive upper bound (start + 7 days).
+      const endIso = dateInputToNaiveStart(end);
       const evs = await listEvents({
         calendarId: calId ? Number(calId) : undefined,
         startTime: startIso,
@@ -363,7 +386,8 @@ export default function SchedulePage() {
       setError(null);
       try {
         const startIso = dateInputToNaiveStart(appliedStart);
-        const endIso = dateInputToNaiveEndExclusive(appliedEnd);
+        // `appliedEnd` is already the exclusive upper bound (start + 7 days).
+        const endIso = dateInputToNaiveStart(appliedEnd);
         const [cals, evs, m] = await Promise.all([
           listCalendars(),
           listEvents({ startTime: startIso, endTime: endIso }),
@@ -431,21 +455,14 @@ export default function SchedulePage() {
 
   function onPickStart(v: string) {
     if (!v) return;
-    if (v > appliedEnd) {
-      const newEnd = shiftDateInput(v, 6);
-      applyRange(v, newEnd);
-    } else {
-      applyRange(v, appliedEnd);
-    }
+    applyRange(v, shiftDateInput(v, WEEK_DAYS));
   }
 
-  function onPickEnd(v: string) {
-    if (!v) return;
-    if (v < appliedStart) {
-      applyRange(v, v);
-    } else {
-      applyRange(appliedStart, v);
-    }
+  function onPickEnd(_v: string) {
+    // End date is derived from start — always clamp back to start + 7 days
+    // so the grid stays a fixed 7-column week regardless of what the user
+    // selected in the (read-only) end picker.
+    applyRange(appliedStart, shiftDateInput(appliedStart, WEEK_DAYS));
   }
 
   function onCalendarFilterChange(v: string) {
@@ -761,8 +778,8 @@ export default function SchedulePage() {
   }
 
   const dayKeys = useMemo(
-    () => buildDayKeys(appliedStart, appliedEnd),
-    [appliedStart, appliedEnd]
+    () => buildWeekDayKeys(appliedStart),
+    [appliedStart]
   );
 
   const upcoming = useMemo(() => {
@@ -777,14 +794,7 @@ export default function SchedulePage() {
   }, [events]);
 
   return (
-    <section>
-      <header className="page-header">
-        <h2 className="page-title">Schedule</h2>
-        <p className="page-subtitle">
-          Plan events, commitments, and protected time.
-        </p>
-      </header>
-
+    <section className="schedule-page">
       {error && (
         <div className="error-box" role="alert">
           {error}
@@ -833,6 +843,8 @@ export default function SchedulePage() {
               value={appliedEnd}
               onChange={(e) => onPickEnd(e.target.value)}
               aria-label="Range end"
+              readOnly
+              title="End date is derived from start (start + 7 days)"
             />
           </div>
         </div>
@@ -902,7 +914,21 @@ export default function SchedulePage() {
 
               <div className="modal-body">
                 <div className="modal-form">
-                  <div className="form-field">
+                  <div className="form-field primary">
+                    <label htmlFor="ev-title">Title</label>
+                    <input
+                      id="ev-title"
+                      type="text"
+                      placeholder="Event title"
+                      value={form.title}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, title: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-field primary">
                     <label htmlFor="ev-calendar">Calendar</label>
                     <select
                       id="ev-calendar"
@@ -922,147 +948,126 @@ export default function SchedulePage() {
                   </div>
 
                   <div className="form-field">
-                    <label htmlFor="ev-title">Title</label>
-                    <input
-                      id="ev-title"
-                      type="text"
-                      placeholder="Event title"
-                      value={form.title}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, title: e.target.value }))
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-field">
-                      <label>Start date + time</label>
-                      <div className="date-time">
-                        <input
-                          type="date"
-                          aria-label="Start date"
-                          value={form.start_date}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              start_date: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                        <input
-                          type="time"
-                          aria-label="Start time"
-                          value={form.start_time}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              start_time: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-field">
-                      <label>End date + time</label>
-                      <div className="date-time">
-                        <input
-                          type="date"
-                          aria-label="End date"
-                          value={form.end_date}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, end_date: e.target.value }))
-                          }
-                          required
-                        />
-                        <input
-                          type="time"
-                          aria-label="End time"
-                          value={form.end_time}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, end_time: e.target.value }))
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-field">
-                      <label htmlFor="ev-category">Category</label>
+                    <label>Start</label>
+                    <div className="date-time date-time-wide">
                       <input
-                        id="ev-category"
-                        type="text"
-                        list="ev-category-options"
-                        placeholder="e.g. Unavailable, Commute, Focus block"
-                        value={form.category}
+                        type="date"
+                        aria-label="Start date"
+                        value={form.start_date}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, category: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            start_date: e.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <input
+                        type="time"
+                        aria-label="Start time"
+                        value={form.start_time}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            start_time: e.target.value,
+                          }))
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-field">
+                    <label>End</label>
+                    <div className="date-time date-time-wide">
+                      <input
+                        type="date"
+                        aria-label="End date"
+                        value={form.end_date}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, end_date: e.target.value }))
+                        }
+                        required
+                      />
+                      <input
+                        type="time"
+                        aria-label="End time"
+                        value={form.end_time}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, end_time: e.target.value }))
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-secondary">
+                    <div className="form-row">
+                      <div className="form-field">
+                        <label htmlFor="ev-category">Category</label>
+                        <input
+                          id="ev-category"
+                          type="text"
+                          list="ev-category-options"
+                          placeholder="Class, Study, Gym..."
+                          value={form.category}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, category: e.target.value }))
+                          }
+                        />
+                        <datalist id="ev-category-options">
+                          <option value="Class" />
+                          <option value="Study" />
+                          <option value="Gym" />
+                          <option value="Focus block" />
+                          <option value="Appointment" />
+                          <option value="Commute" />
+                          <option value="Personal" />
+                        </datalist>
+                      </div>
+
+                      <div className="form-field">
+                        <label htmlFor="ev-priority">Priority</label>
+                        <select
+                          id="ev-priority"
+                          value={form.priority}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, priority: e.target.value }))
+                          }
+                        >
+                          <option value="">—</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-field">
+                      <label htmlFor="ev-location">Location</label>
+                      <input
+                        id="ev-location"
+                        type="text"
+                        placeholder="Location or link"
+                        value={form.location}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, location: e.target.value }))
                         }
                       />
-                      {/*
-                        Suggested categories cover unavailable periods,
-                        commutes, classes, focus blocks, and appointments —
-                        all represented as normal events. The input is
-                        free-form — typing a custom value still works.
-                      */}
-                      <datalist id="ev-category-options">
-                        <option value="Unavailable" />
-                        <option value="Commute" />
-                        <option value="Appointment" />
-                        <option value="Class" />
-                        <option value="Focus block" />
-                        <option value="Personal" />
-                        <option value="Gym" />
-                        <option value="Study" />
-                      </datalist>
                     </div>
 
                     <div className="form-field">
-                      <label htmlFor="ev-priority">Priority</label>
-                      <select
-                        id="ev-priority"
-                        value={form.priority}
+                      <label htmlFor="ev-description">Notes</label>
+                      <textarea
+                        id="ev-description"
+                        rows={3}
+                        placeholder="Notes, agenda, or details"
+                        value={form.description}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, priority: e.target.value }))
+                          setForm((f) => ({ ...f, description: e.target.value }))
                         }
-                      >
-                        <option value="">—</option>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
+                      />
                     </div>
-                  </div>
-
-                  <div className="form-field">
-                    <label htmlFor="ev-location">Location</label>
-                    <input
-                      id="ev-location"
-                      type="text"
-                      placeholder="Add location or link"
-                      value={form.location}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, location: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label htmlFor="ev-description">Description / notes</label>
-                    <textarea
-                      id="ev-description"
-                      rows={3}
-                      placeholder="Add notes, agenda, or any additional details…"
-                      value={form.description}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, description: e.target.value }))
-                      }
-                    />
                   </div>
 
                   {formConflicts.length > 0 && (
@@ -1169,9 +1174,7 @@ export default function SchedulePage() {
                         <span className="modal-info-icon" aria-hidden>
                           ⓘ
                         </span>
-                        <span>
-                          Conflicts and scheduling suggestions will appear here.
-                        </span>
+                        <span>Scheduling notes will appear here.</span>
                       </div>
                     )}
                 </div>
