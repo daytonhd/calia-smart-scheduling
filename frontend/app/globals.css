@@ -31,9 +31,36 @@ body {
   padding: 0;
   font-family: var(--font-sans);
   color: var(--fg);
-  background: var(--bg);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Paint the warm off-white on the canvas (html). Body stays transparent
+   so the body::before grain layer at z-index: -1 sits visibly between
+   the canvas and the app content. */
+html {
+  background: var(--bg);
+}
+
+body {
+  background: transparent;
+}
+
+/* Subtle paper-grain overlay. Inline SVG feTurbulence — no external
+   asset. Pointer-events disabled so it never blocks interaction.
+   z-index: -1 keeps it behind every interactive surface; the sticky
+   header (z:10) and modal overlay (z:50) both create stacking
+   contexts well above this layer. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
+  background-size: 240px 240px;
+  background-repeat: repeat;
 }
 
 a {
@@ -264,12 +291,14 @@ a:hover {
   }
 }
 
-/* Schedule page: give the calendar more breathing room. */
+/* Schedule page: give the calendar more breathing room. The sidebar
+   only joins the main column at wider desktop sizes — at narrower
+   widths it stacks below so the weekly grid never gets crushed. */
 .schedule-page-grid {
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1100px) {
   .schedule-page-grid {
     grid-template-columns: minmax(0, 1fr) 240px;
   }
@@ -842,6 +871,13 @@ button:disabled {
   gap: 0.5rem;
 }
 
+/* ---------- Schedule page wrapper ---------- */
+.schedule-page {
+  /* No oversized page header here — the nav already indicates the page.
+     A small top gap keeps the toolbar from hugging the nav bar. */
+  padding-top: 0.25rem;
+}
+
 /* ---------- Compact toolbar (Schedule workspace) ---------- */
 .toolbar-bar {
   display: flex;
@@ -972,7 +1008,7 @@ button:disabled {
 }
 
 .modal-card {
-  width: min(560px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
@@ -1090,32 +1126,50 @@ button:disabled {
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
 }
 
 .modal-form .form-field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   min-width: 0;
 }
 
-.modal-form .form-field>label {
+.modal-form .form-field > label {
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--fg-soft);
 }
 
+/* Promote the two primary fields (title + calendar) visually. */
+.modal-form .form-field.primary > label {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.modal-form .form-field.primary input,
+.modal-form .form-field.primary select {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.98rem;
+}
+
 .modal-form .form-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
-.modal-form .form-row .date-time {
+.modal-form .date-time {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+/* Date+time pair used directly under a full-width Start/End label.
+   Date input gets a larger share so YYYY-MM-DD never clips. */
+.modal-form .date-time-wide {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
 .modal-form input,
@@ -1124,11 +1178,23 @@ button:disabled {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  padding: 0.5rem 0.65rem;
 }
 
 .modal-form textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 84px;
+  line-height: 1.45;
+}
+
+/* Visual divider between the primary block (title/calendar/start/end)
+   and the secondary block (category/priority/location/notes). */
+.modal-form .form-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
 }
 
 /* Cancel button inside the modal — neutral, slightly understated. */
@@ -1284,7 +1350,12 @@ button:disabled {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   padding: 0.25rem 0.4rem 0.5rem;
-  overflow-x: auto;
+  /* Allow the inner grid to scroll vertically when the visible hour
+     range exceeds the viewport, and horizontally on narrow screens.
+     The header row and day headers are inside this same scroll
+     container so they stay aligned with the body columns. */
+  overflow: auto;
+  max-height: calc(100vh - 200px);
 }
 
 .cal-row {
@@ -1294,6 +1365,12 @@ button:disabled {
 }
 
 .cal-header-row {
+  /* Stick to the top of .cal-panel's scroll viewport so the day labels
+     remain visible while the user scrolls down through the hours. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card-bg);
   border-bottom: 1px solid var(--cal-line-strong);
 }
 
