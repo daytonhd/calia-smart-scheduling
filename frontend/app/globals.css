@@ -1007,6 +1007,25 @@ button:disabled {
   animation: modal-fade-in 140ms ease-out;
 }
 
+/* Lighter "floating panel" overlay — used by Add/Edit Event and
+   Event Details. The schedule stays visible behind the panel and the
+   surface feels less like a full-screen interruption. */
+.modal-overlay.is-panel {
+  background: rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+}
+
+/* When the Add/Edit panel is positioned (desktop only), the overlay
+   stops flex-centering so the card can be absolutely placed at the
+   stored {x, y}. Mobile keeps the centered fallback. */
+@media (min-width: 720px) {
+  .modal-overlay.is-floating {
+    display: block;
+    padding: 0;
+  }
+}
+
 .modal-card {
   width: min(640px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
@@ -1020,6 +1039,91 @@ button:disabled {
     0 4px 12px rgba(15, 23, 42, 0.08);
   overflow: hidden;
   animation: modal-pop-in 160ms ease-out;
+}
+
+/* Smaller, lighter card variant used by the floating panels. */
+.modal-card.modal-panel {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 80px));
+  border-radius: 12px;
+  box-shadow:
+    0 18px 44px rgba(15, 23, 42, 0.20),
+    0 6px 14px rgba(15, 23, 42, 0.10),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+/* Absolute placement when the Add/Edit panel is floating on desktop.
+   Inline top/left from React state drive the actual position. */
+@media (min-width: 720px) {
+  .modal-overlay.is-floating .modal-card.modal-panel {
+    position: absolute;
+  }
+}
+
+/* Drag affordance for the floating Add/Edit panel. The full top header
+   strip is the move target — interactive controls inside (close button,
+   etc.) are filtered out in JS so they keep their normal behavior. */
+.modal-drag-header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: background-color 120ms ease;
+}
+
+/* Boost specificity over the base `.modal-header` shorthand below so the
+   grip-aware top padding actually wins. */
+.modal-header.modal-drag-header {
+  padding-top: 1.55rem;
+}
+
+.modal-drag-header:hover {
+  background-color: rgba(15, 23, 42, 0.025);
+}
+
+.modal-card.is-dragging .modal-drag-header {
+  cursor: grabbing;
+  background-color: rgba(15, 23, 42, 0.05);
+}
+
+/* Small horizontal pill at the top of the drag header. Purely a
+   visual cue — the whole header drags, not just this pill. */
+.modal-drag-grip {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 120ms ease;
+  pointer-events: none;
+}
+
+.modal-drag-header:hover .modal-drag-grip {
+  background: var(--fg-soft);
+}
+
+.modal-card.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+@media (max-width: 719px) {
+  .modal-drag-header {
+    cursor: default;
+    user-select: auto;
+    touch-action: auto;
+  }
+  .modal-header.modal-drag-header {
+    padding-top: 1.1rem;
+  }
+  .modal-drag-header:hover {
+    background-color: transparent;
+  }
+  .modal-drag-grip {
+    display: none;
+  }
 }
 
 /* The <form> sits between .modal-card and its header/body/footer.
@@ -1137,21 +1241,50 @@ button:disabled {
 }
 
 .modal-form .form-field > label {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 500;
-  color: var(--fg-soft);
+  color: var(--muted);
 }
 
-/* Promote the two primary fields (title + calendar) visually. */
-.modal-form .form-field.primary > label {
+/* Title input: a free-form headline that anchors the modal, not a boxed
+   form input. No box border — just a soft underline that brightens on
+   focus, so it reads as a heading the user happens to type into. */
+.modal-form .title-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  font-size: 1.3rem;
+  font-weight: 500;
+  padding: 0.4rem 0 0.55rem;
   color: var(--fg);
-  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: border-color 120ms ease;
 }
 
-.modal-form .form-field.primary input,
-.modal-form .form-field.primary select {
-  padding: 0.55rem 0.7rem;
-  font-size: 0.98rem;
+.modal-form .title-input:focus {
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+}
+
+.modal-form .title-input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Quieter borders on the remaining inputs — feels airier. Borders
+   deepen on hover for a subtle interactive cue, and become accent on
+   focus via the global input:focus rule. */
+.modal-form input:not(.title-input),
+.modal-form select,
+.modal-form textarea {
+  border-color: var(--border);
+}
+
+.modal-form input:not(.title-input):not(:focus):hover,
+.modal-form select:not(:focus):hover,
+.modal-form textarea:not(:focus):hover {
+  border-color: var(--border-strong);
 }
 
 .modal-form .form-row {
@@ -1250,7 +1383,7 @@ button:disabled {
 
 .replacement-options {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1260,29 +1393,57 @@ button:disabled {
 .replacement-option {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.replacement-option-text {
-  flex: 1 1 auto;
-  min-width: 0;
+.replacement-option:hover {
+  background: var(--accent-softer);
+  border-color: #dde7f6;
 }
 
 .replacement-option-when {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
   font-size: 0.88rem;
-  font-weight: 500;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.replacement-option-date {
+  font-weight: 600;
   color: var(--fg);
 }
 
-.replacement-option-why {
-  margin-top: 0.15rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  overflow-wrap: anywhere;
+.replacement-option-time {
+  color: var(--fg-soft);
+  font-weight: 500;
+}
+
+/* "Use this time" button — neutral by default, blue-tinted on hover so
+   the per-row action reads as inviting without competing with Save. */
+.replacement-option button.secondary {
+  flex-shrink: 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  background: #fff;
+  border-color: var(--border-strong);
+  color: var(--fg-soft);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.replacement-option button.secondary:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: #b9cce8;
+  color: var(--accent-strong);
 }
 
 /* ---------- Event Details modal ---------- */
