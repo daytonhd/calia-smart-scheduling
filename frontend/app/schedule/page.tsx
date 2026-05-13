@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ApiError,
   createEvent,
@@ -119,6 +126,14 @@ function formatLongDate(iso: string): string {
     month: "long",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -313,6 +328,44 @@ interface ConflictDetail {
   related_event_id?: number | null;
 }
 
+// Floating-panel sizing for the Add/Edit Event modal.
+// Below `PANEL_DRAG_THRESHOLD_WIDTH` the panel falls back to a centered
+// modal and dragging is disabled.
+const PANEL_WIDTH = 520;
+const PANEL_DRAG_THRESHOLD_WIDTH = 720;
+// Keep the whole panel inside the viewport while dragging, with this
+// margin between any panel edge and the viewport edge.
+const PANEL_VIEWPORT_MARGIN = 8;
+const PANEL_HEIGHT_FALLBACK = 600;
+
+function computeDefaultPanelPos(): { x: number; y: number } | null {
+  if (typeof window === "undefined") return null;
+  if (window.innerWidth < PANEL_DRAG_THRESHOLD_WIDTH) return null;
+  const x = Math.max(16, Math.round((window.innerWidth - PANEL_WIDTH) / 2));
+  const y = Math.max(64, Math.round(window.innerHeight * 0.08));
+  return { x, y };
+}
+
+function clampPanelPos(
+  p: { x: number; y: number },
+  width: number,
+  height: number
+): { x: number; y: number } {
+  if (typeof window === "undefined") return p;
+  const maxX = Math.max(
+    PANEL_VIEWPORT_MARGIN,
+    window.innerWidth - width - PANEL_VIEWPORT_MARGIN
+  );
+  const maxY = Math.max(
+    PANEL_VIEWPORT_MARGIN,
+    window.innerHeight - height - PANEL_VIEWPORT_MARGIN
+  );
+  return {
+    x: Math.max(PANEL_VIEWPORT_MARGIN, Math.min(maxX, p.x)),
+    y: Math.max(PANEL_VIEWPORT_MARGIN, Math.min(maxY, p.y)),
+  };
+}
+
 export default function SchedulePage() {
   const initial = defaultRange();
   const [appliedStart, setAppliedStart] = useState<string>(initial.start);
@@ -332,6 +385,17 @@ export default function SchedulePage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formConflicts, setFormConflicts] = useState<ConflictDetail[]>([]);
+
+  // Floating-panel position for the Add/Edit Event modal. `null` means
+  // "use CSS-centered fallback" (mobile or before first paint). Set to
+  // {x, y} on open at desktop widths; updated while the user drags the
+  // panel header.
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [dragging, setDragging] = useState<boolean>(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Replacement options state inside the Add/Edit modal (conflict recovery).
   const [formOptions, setFormOptions] = useState<RescheduleOption[] | null>(null);
@@ -423,6 +487,88 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen, submitting]);
 
+  // While the Add/Edit panel is open on desktop, keep its position
+  // clamped on resize. Drop to centered fallback if the viewport shrinks
+  // below the desktop threshold.
+  useEffect(() => {
+    if (!formOpen) return;
+    function onResize() {
+      if (typeof window === "undefined") return;
+      if (window.innerWidth < PANEL_DRAG_THRESHOLD_WIDTH) {
+        setPanelPos(null);
+        return;
+      }
+      setPanelPos((p) => {
+        if (!p) return computeDefaultPanelPos();
+        const card = panelRef.current;
+        const width = card?.offsetWidth ?? PANEL_WIDTH;
+        const height = card?.offsetHeight ?? PANEL_HEIGHT_FALLBACK;
+        return clampPanelPos(p, width, height);
+      });
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [formOpen]);
+
+  function onPanelHandlePointerDown(
+    e: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (e.button !== 0) return; // primary button only
+    if (typeof window === "undefined") return;
+    if (window.innerWidth < PANEL_DRAG_THRESHOLD_WIDTH) return;
+    // Don't initiate drag from interactive controls inside the header
+    // (e.g. the close button). The header background drags; controls
+    // keep their normal click/focus behavior.
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      target.closest(
+        "button, input, select, textarea, a, label, [contenteditable=true]"
+      )
+    ) {
+      return;
+    }
+    const card = panelRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+
+  function onPanelHandlePointerMove(
+    e: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (!dragging) return;
+    const card = panelRef.current;
+    if (!card) return;
+    const next = clampPanelPos(
+      {
+        x: e.clientX - dragOffsetRef.current.x,
+        y: e.clientY - dragOffsetRef.current.y,
+      },
+      card.offsetWidth,
+      card.offsetHeight
+    );
+    setPanelPos(next);
+  }
+
+  function onPanelHandlePointerUp(
+    e: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (!dragging) return;
+    setDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer capture may already be released
+    }
+  }
+
   // Close the event details modal on Escape (only while it's open).
   useEffect(() => {
     if (!detailsEvent) return;
@@ -482,6 +628,7 @@ export default function SchedulePage() {
 
   function openCreateForm() {
     resetForm();
+    setPanelPos(computeDefaultPanelPos());
     setFormOpen(true);
   }
 
@@ -505,6 +652,7 @@ export default function SchedulePage() {
       end_date: end.date,
       end_time: end.time,
     });
+    setPanelPos(computeDefaultPanelPos());
     setFormOpen(true);
   }
 
@@ -875,10 +1023,10 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {/* Add / Edit Event modal */}
+      {/* Add / Edit Event floating panel */}
       {formOpen && (
         <div
-          className="modal-overlay"
+          className={`modal-overlay is-panel${panelPos ? " is-floating" : ""}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="event-modal-title"
@@ -890,17 +1038,24 @@ export default function SchedulePage() {
             }
           }}
         >
-          <div className="modal-card">
+          <div
+            ref={panelRef}
+            className={`modal-card modal-panel${dragging ? " is-dragging" : ""}`}
+            style={panelPos ? { top: panelPos.y, left: panelPos.x } : undefined}
+          >
             <form onSubmit={onSubmit} className="modal-form-wrapper">
-              <div className="modal-header">
+              <div
+                className="modal-header modal-drag-header"
+                onPointerDown={onPanelHandlePointerDown}
+                onPointerMove={onPanelHandlePointerMove}
+                onPointerUp={onPanelHandlePointerUp}
+                onPointerCancel={onPanelHandlePointerUp}
+                title="Drag to move"
+              >
+                <span className="modal-drag-grip" aria-hidden />
                 <h2 id="event-modal-title" className="modal-title">
                   {editingId != null ? "Edit Event" : "Add Event"}
                 </h2>
-                <p className="modal-subtitle">
-                  {editingId != null
-                    ? "Update an existing event in your schedule."
-                    : "Create a new event in your schedule."}
-                </p>
                 <button
                   type="button"
                   className="modal-close"
@@ -914,38 +1069,18 @@ export default function SchedulePage() {
 
               <div className="modal-body">
                 <div className="modal-form">
-                  <div className="form-field primary">
-                    <label htmlFor="ev-title">Title</label>
-                    <input
-                      id="ev-title"
-                      type="text"
-                      placeholder="Event title"
-                      value={form.title}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, title: e.target.value }))
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="form-field primary">
-                    <label htmlFor="ev-calendar">Calendar</label>
-                    <select
-                      id="ev-calendar"
-                      value={form.calendar_id}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, calendar_id: e.target.value }))
-                      }
-                      required
-                    >
-                      <option value="">Select a calendar…</option>
-                      {calendars.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <input
+                    id="ev-title"
+                    className="title-input"
+                    type="text"
+                    placeholder="Add title"
+                    aria-label="Title"
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, title: e.target.value }))
+                    }
+                    required
+                  />
 
                   <div className="form-field">
                     <label>Start</label>
@@ -1002,6 +1137,25 @@ export default function SchedulePage() {
                   </div>
 
                   <div className="form-secondary">
+                    <div className="form-field">
+                      <label htmlFor="ev-calendar">Calendar</label>
+                      <select
+                        id="ev-calendar"
+                        value={form.calendar_id}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, calendar_id: e.target.value }))
+                        }
+                        required
+                      >
+                        <option value="">Select a calendar…</option>
+                        {calendars.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="form-row">
                       <div className="form-field">
                         <label htmlFor="ev-category">Category</label>
@@ -1110,51 +1264,44 @@ export default function SchedulePage() {
                   )}
 
                   {formOptions !== null && !formOptionsLoading && (
-                    <div className="modal-info muted" aria-live="polite">
-                      <span className="modal-info-icon" aria-hidden>
-                        ⓘ
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <strong>Replacement options</strong>
-                        {formOptions.length === 0 ? (
-                          <p style={{ margin: "0.4rem 0 0" }}>
-                            No replacement options found in the next two weeks.
-                          </p>
-                        ) : (
-                          <ul className="replacement-options">
-                            {formOptions.map((opt) => (
-                              <li
-                                key={`${opt.rank}-${opt.start_time}`}
-                                className="replacement-option"
-                              >
-                                <div className="replacement-option-text">
-                                  <div className="replacement-option-when">
-                                    {formatLongDate(opt.start_time)}
-                                    {" · "}
-                                    {formatTimeRange(
-                                      opt.start_time,
-                                      opt.end_time
-                                    )}
-                                  </div>
-                                  {opt.explanation && (
-                                    <div className="replacement-option-why">
-                                      {opt.explanation}
-                                    </div>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="secondary"
-                                  onClick={() => chooseOptionInForm(opt)}
-                                >
-                                  Use this time
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                    formOptions.length === 0 ? (
+                      <div className="modal-info muted" aria-live="polite">
+                        <span className="modal-info-icon" aria-hidden>
+                          ⓘ
+                        </span>
+                        <span>
+                          No replacement times in the next two weeks.
+                        </span>
                       </div>
-                    </div>
+                    ) : (
+                      <ul className="replacement-options" aria-live="polite">
+                        {formOptions.map((opt) => (
+                          <li
+                            key={`${opt.rank}-${opt.start_time}`}
+                            className="replacement-option"
+                          >
+                            <div className="replacement-option-when">
+                              <span className="replacement-option-date">
+                                {formatShortDate(opt.start_time)}
+                              </span>
+                              <span className="replacement-option-time">
+                                {formatTimeRange(
+                                  opt.start_time,
+                                  opt.end_time
+                                )}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => chooseOptionInForm(opt)}
+                            >
+                              Use this time
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
                   )}
 
                   {formError && formConflicts.length === 0 && (
@@ -1166,17 +1313,6 @@ export default function SchedulePage() {
                     </div>
                   )}
 
-                  {!formError &&
-                    formConflicts.length === 0 &&
-                    formOptions === null &&
-                    !formOptionsError && (
-                      <div className="modal-info muted" aria-live="polite">
-                        <span className="modal-info-icon" aria-hidden>
-                          ⓘ
-                        </span>
-                        <span>Scheduling notes will appear here.</span>
-                      </div>
-                    )}
                 </div>
               </div>
 
@@ -1201,7 +1337,7 @@ export default function SchedulePage() {
       {/* Event Details modal */}
       {detailsEvent && (
         <div
-          className="modal-overlay"
+          className="modal-overlay is-panel"
           role="dialog"
           aria-modal="true"
           aria-labelledby="event-details-title"
@@ -1209,7 +1345,7 @@ export default function SchedulePage() {
             if (e.target === e.currentTarget) closeDetails();
           }}
         >
-          <div className="modal-card">
+          <div className="modal-card modal-panel">
             <div className="modal-form-wrapper">
               <div className="modal-header">
                 <h2 id="event-details-title" className="modal-title">
@@ -1219,7 +1355,10 @@ export default function SchedulePage() {
                 </h2>
                 <p className="modal-subtitle">
                   {detailsView === "options"
-                    ? "Pick a new time to populate the edit form."
+                    ? `Originally ${formatShortDate(detailsEvent.start_time)} · ${formatTimeRange(
+                        detailsEvent.start_time,
+                        detailsEvent.end_time
+                      )}`
                     : `${formatLongDate(detailsEvent.start_time)} · ${formatTimeRange(
                         detailsEvent.start_time,
                         detailsEvent.end_time
@@ -1266,20 +1405,6 @@ export default function SchedulePage() {
                   </div>
                 ) : (
                   <div className="modal-form">
-                    <div className="modal-info muted">
-                      <span className="modal-info-icon" aria-hidden>
-                        ⓘ
-                      </span>
-                      <span>
-                        Original time: {formatLongDate(detailsEvent.start_time)}
-                        {" · "}
-                        {formatTimeRange(
-                          detailsEvent.start_time,
-                          detailsEvent.end_time
-                        )}
-                      </span>
-                    </div>
-
                     {detailsOptionsLoading && (
                       <p className="muted small" style={{ margin: 0 }}>
                         Loading replacement options…
@@ -1306,7 +1431,7 @@ export default function SchedulePage() {
                             ⓘ
                           </span>
                           <span>
-                            No replacement options found in the next two weeks.
+                            No replacement times in the next two weeks.
                           </span>
                         </div>
                       )}
@@ -1318,17 +1443,13 @@ export default function SchedulePage() {
                             key={`${opt.rank}-${opt.start_time}`}
                             className="replacement-option"
                           >
-                            <div className="replacement-option-text">
-                              <div className="replacement-option-when">
-                                {formatLongDate(opt.start_time)}
-                                {" · "}
+                            <div className="replacement-option-when">
+                              <span className="replacement-option-date">
+                                {formatShortDate(opt.start_time)}
+                              </span>
+                              <span className="replacement-option-time">
                                 {formatTimeRange(opt.start_time, opt.end_time)}
-                              </div>
-                              {opt.explanation && (
-                                <div className="replacement-option-why">
-                                  {opt.explanation}
-                                </div>
-                              )}
+                              </span>
                             </div>
                             <button
                               type="button"
