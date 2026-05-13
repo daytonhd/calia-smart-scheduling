@@ -137,6 +137,20 @@ function formatShortDate(iso: string): string {
   });
 }
 
+// Format a bare "YYYY-MM-DD" date (e.g. WeeklyMetrics.busiest_day) as
+// "Weekday, MM/DD/YY". Built from local date parts so the displayed
+// weekday matches the calendar day regardless of timezone.
+function formatBusiestDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const date = new Date(y, mo - 1, d);
+  const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
+  return `${weekday}, ${pad(mo)}/${pad(d)}/${String(y).slice(-2)}`;
+}
+
 function formatHourLabel(h: number): string {
   if (h === 0) return "12 AM";
   if (h === 12) return "12 PM";
@@ -1707,7 +1721,9 @@ export default function SchedulePage() {
                 <div className="metric-row">
                   <span className="metric-label">Busiest day</span>
                   <span className="metric-value">
-                    {metrics.busiest_day ?? "—"}
+                    {metrics.busiest_day
+                      ? formatBusiestDay(metrics.busiest_day)
+                      : "—"}
                   </span>
                 </div>
               </div>
