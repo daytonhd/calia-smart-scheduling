@@ -40,6 +40,9 @@ export interface EventCreate {
   location?: string | null;
   start_time: string;
   end_time: string;
+  // Request-only override: when true, the backend may save an event that
+  // overlaps existing events. Not part of the stored Event.
+  allow_conflicts?: boolean;
 }
 
 export interface EventUpdate {
@@ -51,6 +54,9 @@ export interface EventUpdate {
   location?: string | null;
   start_time?: string;
   end_time?: string;
+  // Request-only override: when true, the backend may save an event that
+  // overlaps existing events. Not part of the stored Event.
+  allow_conflicts?: boolean;
 }
 
 export interface ScheduleSummary {

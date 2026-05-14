@@ -865,10 +865,22 @@ export default function SchedulePage() {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await submitEvent(false);
+  }
+
+  // Shared save path for the normal "Save Event" submit and the "Save anyway"
+  // overlap override. `allowConflicts` is forwarded to the backend as an
+  // explicit request flag — it is never inferred from category or anything
+  // else.
+  async function submitEvent(allowConflicts: boolean) {
+    // A normal submit starts fresh. "Save anyway" deliberately keeps the
+    // existing conflict warning visible until the save actually succeeds.
+    if (!allowConflicts) {
+      setFormConflicts([]);
+      setFormOptions(null);
+      setFormOptionsError(null);
+    }
     setFormError(null);
-    setFormConflicts([]);
-    setFormOptions(null);
-    setFormOptionsError(null);
 
     if (!form.calendar_id) {
       setFormError("Calendar is required.");
@@ -903,6 +915,7 @@ export default function SchedulePage() {
       location: form.location.trim() || null,
       start_time: fromLocalInputNaive(startIso),
       end_time: fromLocalInputNaive(endIso),
+      allow_conflicts: allowConflicts,
     };
 
     setSubmitting(true);
@@ -1244,13 +1257,20 @@ export default function SchedulePage() {
                         !
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <strong>This time does not work</strong>
+                        <strong>This time overlaps another event.</strong>
                         <ul style={{ margin: "0.35rem 0 0 1rem", padding: 0 }}>
                           {formConflicts.map((c, i) => (
                             <li key={i}>{c.message}</li>
                           ))}
                         </ul>
-                        <div style={{ marginTop: "0.6rem" }}>
+                        <div
+                          style={{
+                            marginTop: "0.6rem",
+                            display: "flex",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <button
                             type="button"
                             className="secondary"
@@ -1261,7 +1281,24 @@ export default function SchedulePage() {
                               ? "Loading replacement options…"
                               : "Find replacement times"}
                           </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => submitEvent(true)}
+                            disabled={submitting}
+                          >
+                            {submitting ? "Saving…" : "Save anyway"}
+                          </button>
                         </div>
+                        <p
+                          style={{
+                            margin: "0.4rem 0 0",
+                            fontSize: "0.85rem",
+                            opacity: 0.75,
+                          }}
+                        >
+                          This will keep both events on your schedule.
+                        </p>
                       </div>
                     </div>
                   )}

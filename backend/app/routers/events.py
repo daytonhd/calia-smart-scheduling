@@ -27,13 +27,15 @@ def create_event(body: EventCreate, session: Session = Depends(get_session)):
     _ensure_calendar_exists(body.calendar_id, session)
 
     conflicts = check_all_conflicts(body.start_time, body.end_time, session)
-    if conflicts:
+    if conflicts and not body.allow_conflicts:
         raise HTTPException(
             status_code=409,
             detail={"conflicts": [c.model_dump(mode="json") for c in conflicts]},
         )
 
-    event = Event(**body.model_dump())
+    # allow_conflicts is a request-only override flag — exclude it before
+    # constructing the Event, which has no such column.
+    event = Event(**body.model_dump(exclude={"allow_conflicts"}))
     session.add(event)
     session.commit()
     session.refresh(event)
@@ -90,7 +92,9 @@ def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    updates = body.model_dump(exclude_unset=True)
+    # allow_conflicts is a request-only override flag — exclude it from the
+    # fields applied to the Event, which has no such column.
+    updates = body.model_dump(exclude_unset=True, exclude={"allow_conflicts"})
 
     # If updating calendar_id, verify the new calendar exists
     if "calendar_id" in updates:
@@ -107,7 +111,7 @@ def update_event(
         )
 
     conflicts = check_all_conflicts(new_start, new_end, session, exclude_event_id=event_id)
-    if conflicts:
+    if conflicts and not body.allow_conflicts:
         raise HTTPException(
             status_code=409,
             detail={"conflicts": [c.model_dump(mode="json") for c in conflicts]},

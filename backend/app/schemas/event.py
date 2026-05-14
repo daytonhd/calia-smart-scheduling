@@ -20,6 +20,9 @@ class EventCreate(SQLModel):
     location: Optional[str] = None
     start_time: datetime
     end_time: datetime
+    # Request-only override: when True, the create endpoint may save an event
+    # that overlaps existing events. Never persisted on the Event model.
+    allow_conflicts: bool = False
 
     @field_validator("start_time", "end_time")
     @classmethod
@@ -44,6 +47,9 @@ class EventUpdate(SQLModel):
     location: Optional[str] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+    # Request-only override: when True, the update endpoint may save an event
+    # that overlaps existing events. Never persisted on the Event model.
+    allow_conflicts: bool = False
 
     @field_validator("start_time", "end_time")
     @classmethod
