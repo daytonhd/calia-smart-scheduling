@@ -3,9 +3,13 @@
 Active conflict types:
   1. EVENT_OVERLAP — proposed time overlaps an existing event
 
-All saved Events count as occupied time. Categorized Events (e.g.
-Unavailable, Commute, Class, Focus block) are the sole occupied-time
-model.
+Event categories are descriptive only. Category values do not control
+scheduling availability, conflict behavior, slot suggestions, or
+replacement options. For the MVP, every saved Event is treated as occupied
+time for conflict checks, slot suggestions, and replacement-option logic —
+regardless of category — unless a future explicit blocking field is added.
+Category is for display, filtering, labels, and analytics, never for
+deciding whether a time slot is free or occupied.
 
 Legacy availability-window checks have been removed. Manual event create /
 update is allowed outside Daily Rhythm hours as long as the range is valid
