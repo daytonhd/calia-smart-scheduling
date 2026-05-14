@@ -5,6 +5,7 @@ Tests anchor on Monday 2026-04-20 (weekday = 0) unless stated otherwise.
 """
 
 from datetime import datetime, time
+from typing import Optional
 
 from sqlmodel import Session
 
@@ -27,8 +28,15 @@ def make_event(
     start: datetime,
     end: datetime,
     title: str = "Event",
+    category: Optional[str] = None,
 ) -> Event:
-    ev = Event(calendar_id=calendar_id, title=title, start_time=start, end_time=end)
+    ev = Event(
+        calendar_id=calendar_id,
+        title=title,
+        start_time=start,
+        end_time=end,
+        category=category,
+    )
     session.add(ev)
     session.commit()
     session.refresh(ev)
