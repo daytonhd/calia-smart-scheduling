@@ -64,10 +64,10 @@ def suggest_slots(
 ):
     """Return up to max_results conflict-free time slots of the requested duration.
 
-    Scans daily suggestion hours (8 AM–9 PM) in 30-minute increments over the
-    given date range (defaults to the next 7 days). Returns earliest valid
-    slots first. A slot is valid when it does not overlap an existing event
-    or any other occupied schedule item.
+    Scans the user's Daily Rhythm suggestion hours in 30-minute increments
+    over the given date range (defaults to the next 7 days). Returns earliest
+    valid slots first. A slot is valid when it does not overlap an existing
+    event or any other occupied schedule item.
     """
     today = date.today()
     start = body.start_date or today
@@ -108,9 +108,9 @@ def reschedule_options(
 ):
     """Return ranked replacement slots for an existing event.
 
-    Candidate slots are scanned inside Daily Rhythm suggestion hours
-    (8 AM–9 PM), preserve the event's duration, and avoid existing events
-    and other occupied schedule items. legacy availability rows are not
+    Candidate slots are scanned inside the user's Daily Rhythm suggestion
+    hours, preserve the event's duration, and avoid existing events and
+    other occupied schedule items. legacy availability rows are not
     consulted. The target event is excluded from event-overlap checks.
     Does NOT modify the event.
 
@@ -140,8 +140,8 @@ def proposed_reschedule_options(
 
     Mirrors POST /schedule/reschedule-options but for an event that has not
     been saved yet (typically because the initial create attempt produced a
-    409 conflict). Candidate slots are scanned inside Daily Rhythm
-    suggestion hours (8 AM–9 PM), preserve the duration derived from the
+    409 conflict). Candidate slots are scanned inside the user's Daily
+    Rhythm suggestion hours, preserve the duration derived from the
     proposed start/end, and avoid existing events and other occupied
     schedule items. legacy availability rows are not consulted. The
     proposed event is NOT persisted — callers receive candidate options

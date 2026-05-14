@@ -67,6 +67,25 @@ export interface ScheduleSummary {
   created_at: string;   // ISO datetime
 }
 
+// ----- Daily Rhythm (GET/PATCH /daily-rhythm) -----
+// Times are "HH:MM" 24-hour strings. Daily Rhythm describes the shape of the
+// day — awake hours plus the narrower suggestion hours. It is not
+// availability: manual events are never rejected for falling outside it.
+
+export interface DailyRhythm {
+  awake_start_time: string;       // "HH:MM"
+  awake_end_time: string;         // "HH:MM"
+  suggestions_start_time: string; // "HH:MM"
+  suggestions_end_time: string;   // "HH:MM"
+}
+
+export interface DailyRhythmUpdate {
+  awake_start_time: string;
+  awake_end_time: string;
+  suggestions_start_time: string;
+  suggestions_end_time: string;
+}
+
 export interface WeeklyMetrics {
   week_start: string;         // ISO date
   week_end: string;           // ISO date

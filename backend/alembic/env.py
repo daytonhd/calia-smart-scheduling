@@ -13,7 +13,13 @@ from dotenv import load_dotenv
 load_dotenv()  # reads backend/.env when running from backend/
 
 # ---------- import all models so metadata is populated ----------
-from app.models import Calendar, Event, ScheduleSummary  # noqa: F401
+from app.models import (  # noqa: F401
+    Calendar,
+    DailyRhythm,
+    Event,
+    ScheduleSummary,
+    User,
+)
 
 # ---------- Alembic Config object ----------
 config = context.config

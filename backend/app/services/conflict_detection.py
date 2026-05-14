@@ -186,7 +186,9 @@ def find_free_windows(
     """
     results: List[FreeWindow] = []
 
-    for w_start, w_end in get_suggestion_windows_for_range(start_date, end_date):
+    for w_start, w_end in get_suggestion_windows_for_range(
+        start_date, end_date, session=session
+    ):
         events = session.exec(
             select(Event).where(
                 Event.start_time < w_end,
@@ -241,7 +243,7 @@ def find_available_slots(
     results: List[SlotSuggestion] = []
 
     for window_start, window_end in get_suggestion_windows_for_range(
-        start_date, end_date
+        start_date, end_date, session=session
     ):
         if len(results) >= max_results:
             break

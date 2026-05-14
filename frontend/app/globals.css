@@ -871,6 +871,31 @@ button:disabled {
   gap: 0.5rem;
 }
 
+/* Daily Rhythm form (Settings) — caption + paired time inputs. */
+.rhythm-field-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.rhythm-time-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Success counterpart to .error-box — same shape, accent palette. */
+.success-box {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent);
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--radius-control);
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+}
+
 /* ---------- Schedule page wrapper ---------- */
 .schedule-page {
   /* No oversized page header here — the nav already indicates the page.

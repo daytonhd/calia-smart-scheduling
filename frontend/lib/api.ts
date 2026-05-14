@@ -6,6 +6,8 @@ import type {
   Calendar,
   CalendarCreate,
   CalendarUpdate,
+  DailyRhythm,
+  DailyRhythmUpdate,
   Event,
   EventCreate,
   EventUpdate,
@@ -193,6 +195,23 @@ export function getScheduleBalance(
 ): Promise<ScheduleBalanceResponse> {
   const qs = weekStart ? `?week_start=${weekStart}` : "";
   return request<ScheduleBalanceResponse>(`/schedule/triage${qs}`);
+}
+
+// ----- Daily Rhythm -----
+// GET returns the persisted rhythm, or backend defaults when none is saved.
+// PATCH validates and persists the four times ("HH:MM" 24-hour strings).
+
+export function getDailyRhythm(): Promise<DailyRhythm> {
+  return request<DailyRhythm>("/daily-rhythm");
+}
+
+export function updateDailyRhythm(
+  body: DailyRhythmUpdate
+): Promise<DailyRhythm> {
+  return request<DailyRhythm>("/daily-rhythm", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }
 
 // ----- Saved weekly AI summary -----
