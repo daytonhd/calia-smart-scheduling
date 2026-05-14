@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ApiError,
+  getDailyRhythm,
   getScheduleBalance,
   getWeeklySummary,
   listEvents,
 } from "@/lib/api";
 import type {
+  DailyRhythm,
   Event,
   ScheduleBalanceDay,
   ScheduleBalanceResponse,
