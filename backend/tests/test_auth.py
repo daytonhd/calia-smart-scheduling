@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlmodel import select
 
 from app.models.calendar import Calendar
+from app.models.category import Category
 from app.models.daily_rhythm import DailyRhythm
 from app.models.user import User
 from app.routers.auth import (
@@ -84,6 +85,11 @@ def test_signup_hashes_password_not_plaintext(session):
 def test_signup_does_not_create_calendars(session):
     signup(_signup_body(), session)
     assert session.exec(select(Calendar)).all() == []
+
+
+def test_signup_does_not_create_categories(session):
+    signup(_signup_body(), session)
+    assert session.exec(select(Category)).all() == []
 
 
 def test_signup_creates_daily_rhythm_defaults_for_new_user(session):

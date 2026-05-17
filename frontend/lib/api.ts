@@ -6,6 +6,9 @@ import type {
   Calendar,
   CalendarCreate,
   CalendarUpdate,
+  Category,
+  CategoryCreate,
+  CategoryUpdate,
   DailyRhythm,
   DailyRhythmUpdate,
   Event,
@@ -113,6 +116,35 @@ export function updateCalendar(
 
 export function deleteCalendar(id: number): Promise<void> {
   return request<void>(`/calendars/${id}`, { method: "DELETE" });
+}
+
+// ----- Categories -----
+// User-managed labels for events. Categories are descriptive only and do
+// not affect scheduling logic.
+
+export function listCategories(): Promise<Category[]> {
+  return request<Category[]>("/categories/");
+}
+
+export function createCategory(body: CategoryCreate): Promise<Category> {
+  return request<Category>("/categories/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateCategory(
+  id: number,
+  body: CategoryUpdate
+): Promise<Category> {
+  return request<Category>(`/categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteCategory(id: number): Promise<void> {
+  return request<void>(`/categories/${id}`, { method: "DELETE" });
 }
 
 // ----- Events -----
