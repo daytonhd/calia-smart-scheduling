@@ -17,6 +17,29 @@ export interface CalendarUpdate {
   color?: string | null;
 }
 
+// ----- Categories -----
+// User-managed labels for events. Categories are descriptive only — they do
+// not affect conflict detection, slot suggestions, replacement options, or
+// any schedule metric. Event.category remains a plain optional string.
+
+export interface Category {
+  id: number;
+  name: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryCreate {
+  name: string;
+  color?: string | null;
+}
+
+export interface CategoryUpdate {
+  name?: string;
+  color?: string | null;
+}
+
 export interface Event {
   id: number;
   calendar_id: number;

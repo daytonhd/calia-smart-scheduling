@@ -871,6 +871,52 @@ button:disabled {
   gap: 0.5rem;
 }
 
+/* Settings empty state — used when calendars or categories list is empty.
+   Quiet card with one inviting call-to-action. */
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 1.25rem 1.4rem;
+  margin: 0.75rem 0 1rem;
+  background: var(--accent-softer);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.settings-empty-title {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+}
+
+.settings-empty-body {
+  margin: 0;
+  color: var(--fg-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 56ch;
+}
+
+/* Category list row — small color swatch next to the name. */
+.category-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
 /* Daily Rhythm form (Settings) — caption + paired time inputs. */
 .rhythm-field-label {
   display: block;

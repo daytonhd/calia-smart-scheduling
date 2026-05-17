@@ -15,6 +15,7 @@ load_dotenv()  # reads backend/.env when running from backend/
 # ---------- import all models so metadata is populated ----------
 from app.models import (  # noqa: F401
     Calendar,
+    Category,
     DailyRhythm,
     Event,
     ScheduleSummary,
