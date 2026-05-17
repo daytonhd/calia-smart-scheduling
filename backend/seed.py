@@ -15,10 +15,13 @@ from app.database import engine
 import app.models  # noqa: F401 — registers all SQLModel metadata
 from app.models.user import User
 from app.models.calendar import Calendar
+from app.security import hash_password
 
 
 DEMO_USER_NAME = "Demo User"
 DEMO_USER_EMAIL = "demo@example.com"
+# Local-dev demo credentials only. Never use this elsewhere.
+DEMO_USER_PASSWORD = "demo-password"
 
 SAMPLE_CALENDARS = [
     {"name": "Work", "color": "#3B82F6"},
@@ -34,7 +37,11 @@ def seed() -> None:
             select(User).where(User.email == DEMO_USER_EMAIL)
         ).first()
         if not existing_user:
-            user = User(name=DEMO_USER_NAME, email=DEMO_USER_EMAIL)
+            user = User(
+                name=DEMO_USER_NAME,
+                email=DEMO_USER_EMAIL,
+                hashed_password=hash_password(DEMO_USER_PASSWORD),
+            )
             session.add(user)
             session.commit()
             session.refresh(user)

@@ -1,3 +1,3 @@
 """API routers."""
 
-from app.routers import calendars, events  # noqa: F401
+from app.routers import auth, calendars, events  # noqa: F401
