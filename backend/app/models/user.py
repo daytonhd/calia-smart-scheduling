@@ -1,4 +1,4 @@
-"""Minimal MVP user model — auth deferred."""
+"""User model — email/password auth for the MVP."""
 
 from datetime import datetime, timezone
 from typing import Optional
@@ -11,7 +11,8 @@ class User(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, max_length=120)
-    email: str = Field(nullable=False, max_length=255)
+    email: str = Field(nullable=False, max_length=255, unique=True, index=True)
+    hashed_password: str = Field(nullable=False, max_length=255)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), nullable=False
     )

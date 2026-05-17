@@ -24,3 +24,15 @@ def _parse_origins(raw: str) -> List[str]:
 CORS_ORIGINS: List[str] = _parse_origins(
     os.getenv("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS)
 )
+
+
+# JWT auth config. JWT_SECRET_KEY MUST be set via environment variable in
+# production — the default below is only for local development.
+JWT_SECRET_KEY: str = os.getenv(
+    "JWT_SECRET_KEY",
+    "dev-only-insecure-secret-change-me",
+)
+JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
+    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+)
