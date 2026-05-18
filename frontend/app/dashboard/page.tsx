@@ -73,11 +73,30 @@ function upcomingWindowIso(): { start: string; end: string } {
   return { start: naiveLocalIso(start), end: naiveLocalIso(end) };
 }
 
-// ----- Schedule Balance helpers -----
+// Derive the [start, end) naive ISO window for the current Schedule
+// Balance week from the triage response. Aligning with balance.week_start
+// and balance.week_end keeps the category chart and Daily Load showing
+// the same days. `week_end` is inclusive, so we bump it by one day for
+// the half-open event-list query the backend expects.
+function balanceWindowIso(
+  balance: ScheduleBalanceResponse
+): { start: string; end: string } {
+  const startParts = balance.week_start.split("-").map(Number);
+  const endParts = balance.week_end.split("-").map(Number);
+  const startDate = new Date(
+    startParts[0],
+    (startParts[1] ?? 1) - 1,
+    startParts[2] ?? 1
+  );
+  const endDate = new Date(
+    endParts[0],
+    (endParts[1] ?? 1) - 1,
+    (endParts[2] ?? 1) + 1
+  );
+  return { start: naiveLocalIso(startDate), end: naiveLocalIso(endDate) };
+}
 
-// Daily Rhythm suggestion window upper bound used for visual scaling.
-// The shared bottom scale shows 0h, 4h, 8h.
-const BALANCE_SCALE_MAX_MIN = 8 * 60;
+// ----- Schedule Balance helpers -----
 
 function weekdayShort(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -92,6 +111,98 @@ function weekdayLong(iso: string): string {
 interface BalanceStatus {
   label: string;   // "Light" | "Balanced" | "Heavy" | "Slightly Heavy" | "Empty"
   detail: string;  // compact interpretation
+}
+
+// ----- Category breakdown helpers -----
+
+// Restrained palette aligned with the rest of the Calia visual style.
+// Order is stable so re-renders don't reshuffle colors.
+const CATEGORY_COLORS = [
+  "#6592df", // accent blue
+  "#7c9b6f", // soft green
+  "#c98d54", // warm amber
+  "#a07ab8", // muted purple
+  "#5d80c4", // deeper blue
+  "#c46868", // restrained red
+  "#9aa3b2", // neutral slate
+];
+
+const UNCATEGORIZED_LABEL = "Uncategorized";
+
+interface CategorySlice {
+  label: string;
+  minutes: number;
+  color: string;
+}
+
+// Convert a list of events into one slice per category. Events with no
+// category fall under "Uncategorized". Returns slices sorted descending by
+// minutes for a stable legend.
+function buildCategorySlices(events: Event[]): CategorySlice[] {
+  const totals = new Map<string, number>();
+  for (const ev of events) {
+    const label = (ev.category ?? "").trim() || UNCATEGORIZED_LABEL;
+    const minutes = Math.max(
+      0,
+      Math.round(
+        (new Date(ev.end_time).getTime() -
+          new Date(ev.start_time).getTime()) /
+          60000
+      )
+    );
+    if (minutes === 0) continue;
+    totals.set(label, (totals.get(label) ?? 0) + minutes);
+  }
+  return Array.from(totals.entries())
+    .map(([label, minutes], i) => ({
+      label,
+      minutes,
+      color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+    }))
+    .sort((a, b) => b.minutes - a.minutes)
+    .map((s, i) => ({
+      ...s,
+      color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+    }));
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes <= 0) return "0m";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+// Build an SVG donut arc path for `[startAngle, endAngle)` in radians,
+// measured clockwise from 12 o'clock. `r` is the outer radius; the donut
+// hole is carved by the second arc with `rInner`.
+function donutArcPath(
+  cx: number,
+  cy: number,
+  r: number,
+  rInner: number,
+  startAngle: number,
+  endAngle: number
+): string {
+  const polar = (radius: number, angle: number) => ({
+    x: cx + radius * Math.sin(angle),
+    y: cy - radius * Math.cos(angle),
+  });
+  const sweep = endAngle - startAngle;
+  const largeArc = sweep > Math.PI ? 1 : 0;
+  const oStart = polar(r, startAngle);
+  const oEnd = polar(r, endAngle);
+  const iStart = polar(rInner, endAngle);
+  const iEnd = polar(rInner, startAngle);
+  return [
+    `M ${oStart.x} ${oStart.y}`,
+    `A ${r} ${r} 0 ${largeArc} 1 ${oEnd.x} ${oEnd.y}`,
+    `L ${iStart.x} ${iStart.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${iEnd.x} ${iEnd.y}`,
+    "Z",
+  ].join(" ");
 }
 
 function computeBalanceStatus(days: ScheduleBalanceDay[]): BalanceStatus {
@@ -141,6 +252,7 @@ function computeBalanceStatus(days: ScheduleBalanceDay[]): BalanceStatus {
 export default function DashboardPage() {
   const [todayEvents, setTodayEvents] = useState<Event[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
+  const [weekEvents, setWeekEvents] = useState<Event[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
   const [balance, setBalance] = useState<ScheduleBalanceResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -156,6 +268,8 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
+        // Fetch Schedule Balance first so the week-events query uses the
+        // same Mon–Sun window the backend just summarized.
         const [ev, up, ws, sb] = await Promise.all([
           listEvents({ startTime: start, endTime: end }),
           listEvents({ startTime: upStart, endTime: upEnd }),
@@ -180,6 +294,18 @@ export default function DashboardPage() {
         );
         setSummary(ws);
         setBalance(sb);
+
+        if (sb) {
+          const win = balanceWindowIso(sb);
+          const wk = await listEvents({
+            startTime: win.start,
+            endTime: win.end,
+          });
+          if (cancelled) return;
+          setWeekEvents(wk);
+        } else {
+          setWeekEvents([]);
+        }
       } catch (e) {
         if (cancelled) return;
         const msg =
@@ -245,194 +371,185 @@ export default function DashboardPage() {
                   <h3 className="card-title">Schedule Balance</h3>
                 </div>
 
-                {!balance || balance.days.length === 0 ? (
-                  <div className="empty-state">
-                    <span className="empty-state-strong">
-                      Your week is wide open
-                    </span>
-                    Once events are added, you&rsquo;ll see how the load is
-                    distributed across the week.
-                  </div>
-                ) : (
-                  (() => {
-                    const status = computeBalanceStatus(balance.days);
-                    // Daily Load y-axis max: round up max busy hours to even number, min 8h.
-                    const maxBusyMin = Math.max(
-                      ...balance.days.map((d) => d.total_busy_minutes)
-                    );
-                    const maxAxisHours = Math.max(
-                      8,
-                      Math.ceil(maxBusyMin / 60 / 2) * 2
-                    );
-                    const maxAxisMin = maxAxisHours * 60;
-                    const peakIdx = balance.days.findIndex(
-                      (d) => d.total_busy_minutes === maxBusyMin
-                    );
-                    // Average busy minutes → marker position on Light↔Heavy gradient.
-                    // 0h → 0%, 3h → 50%, 6h → 100%.
-                    const avgBusyMin =
-                      balance.days.reduce(
-                        (s, d) => s + d.total_busy_minutes,
-                        0
-                      ) / balance.days.length;
-                    const markerPct = Math.min(
-                      100,
-                      Math.max(0, (avgBusyMin / (6 * 60)) * 100)
-                    );
-                    const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) =>
-                      Math.round(f * maxAxisHours)
-                    );
+                {(() => {
+                  const balanceDays = balance?.days ?? [];
+                  const totalWeekMin = balanceDays.reduce(
+                    (s, d) => s + d.total_busy_minutes,
+                    0
+                  );
+                  const isEmptyWeek =
+                    balanceDays.length === 0 || totalWeekMin === 0;
+
+                  if (isEmptyWeek) {
                     return (
-                      <>
-                        <div className="balance-grid">
-                          {/* Free Capacity — horizontal bars */}
-                          <div className="balance-subcard">
-                            <div className="balance-subcard-head">
-                              <h4 className="balance-subcard-title">
-                                Free Capacity
-                              </h4>
-                              <p className="balance-subcard-sub">
-                                Longest open window each day
-                              </p>
-                            </div>
-                            <div className="capacity-bars">
-                              {balance.days.map((d) => {
-                                const pct = Math.min(
-                                  100,
-                                  (d.longest_free_window_minutes /
-                                    BALANCE_SCALE_MAX_MIN) *
-                                    100
-                                );
-                                const tight =
-                                  d.has_weak_buffer || d.is_overloaded;
-                                return (
-                                  <div className="capacity-row" key={d.date}>
-                                    <div className="capacity-day">
-                                      {weekdayShort(d.date)}
-                                    </div>
-                                    <div className="capacity-track">
-                                      <div
-                                        className={`capacity-fill ${
-                                          tight ? "tight" : ""
-                                        }`}
-                                        style={{ width: `${pct}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                              <div className="capacity-scale">
-                                <span>0h</span>
-                                <span>4h</span>
-                                <span>8h</span>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="empty-state">
+                        <span className="empty-state-strong">
+                          No scheduled time this week yet
+                        </span>
+                        Create events on the Schedule page to see your weekly
+                        breakdown.
+                      </div>
+                    );
+                  }
 
-                          {/* Daily Load — vertical bars with y-axis */}
-                          <div className="balance-subcard">
-                            <div className="balance-subcard-head">
-                              <h4 className="balance-subcard-title">
-                                Daily Load
-                              </h4>
-                              <p className="balance-subcard-sub">
-                                Hours of scheduled time each day.
-                              </p>
-                            </div>
-                            <div className="load-chart">
-                              <div className="load-yaxis">
-                                {[...yTicks].reverse().map((t) => (
-                                  <span key={t} className="load-ytick">
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
-                              <div className="load-plot">
-                                <div className="load-gridlines" aria-hidden>
-                                  {yTicks.map((t) => (
-                                    <div key={t} className="load-gridline" />
-                                  ))}
-                                </div>
-                                <div className="load-bars">
-                                  {balance.days.map((d, i) => {
-                                    const h = Math.min(
-                                      100,
-                                      (d.total_busy_minutes / maxAxisMin) * 100
-                                    );
-                                    const isPeak = i === peakIdx && maxBusyMin > 0;
-                                    return (
-                                      <div className="load-col" key={d.date}>
-                                        <div className="load-bar-wrap">
-                                          <div
-                                            className={`load-bar ${
-                                              isPeak ? "peak" : ""
-                                            }`}
-                                            style={{ height: `${h}%` }}
-                                            title={`${Math.round(
-                                              (d.total_busy_minutes / 60) * 10
-                                            ) / 10}h scheduled`}
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="load-xaxis">
-                              {balance.days.map((d) => (
-                                <span key={d.date}>{weekdayShort(d.date)}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+                  const status = computeBalanceStatus(balanceDays);
+                  const slices = buildCategorySlices(weekEvents);
+                  const totalSliceMin = slices.reduce(
+                    (s, c) => s + c.minutes,
+                    0
+                  );
 
-                        {/* Bottom strip: Light–Balanced–Heavy gradient + interpretation */}
-                        <div className="balance-bottom">
-                          <div className="balance-gradient">
-                            <div className="balance-gradient-labels">
-                              <span>Light</span>
-                              <span>Balanced</span>
-                              <span>Heavy</span>
-                            </div>
-                            <div className="balance-gradient-track">
-                              <div
-                                className="balance-gradient-marker"
-                                style={{ left: `${markerPct}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="balance-interpretation">
-                            <div
-                              className={`balance-interpretation-label ${
-                                status.label === "Heavy"
-                                  ? "heavy"
-                                  : status.label === "Slightly Heavy"
-                                  ? "slight-heavy"
-                                  : status.label === "Light"
-                                  ? "light"
-                                  : "balanced"
-                              }`}
-                            >
-                              {status.label}
-                            </div>
-                            <p className="balance-interpretation-detail">
-                              {status.detail}
+                  // Daily Load y-axis: round max busy hours up to the
+                  // nearest 2h; floor at 4h so a near-empty week doesn't
+                  // stretch the bars vertically.
+                  const maxBusyMin = Math.max(
+                    ...balanceDays.map((d) => d.total_busy_minutes)
+                  );
+                  const maxAxisHours = Math.max(
+                    4,
+                    Math.ceil(maxBusyMin / 60 / 2) * 2
+                  );
+                  const maxAxisMin = maxAxisHours * 60;
+                  const peakIdx = balanceDays.findIndex(
+                    (d) => d.total_busy_minutes === maxBusyMin
+                  );
+                  // Average busy minutes → marker position on Light↔Heavy
+                  // gradient. 0h → 0%, 3h → 50%, 6h → 100%.
+                  const avgBusyMin = totalWeekMin / balanceDays.length;
+                  const markerPct = Math.min(
+                    100,
+                    Math.max(0, (avgBusyMin / (6 * 60)) * 100)
+                  );
+                  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+                    Math.round(f * maxAxisHours)
+                  );
+                  return (
+                    <>
+                      <div className="balance-grid">
+                        {/* By Category — doughnut chart */}
+                        <div className="balance-subcard">
+                          <div className="balance-subcard-head">
+                            <h4 className="balance-subcard-title">
+                              By Category
+                            </h4>
+                            <p className="balance-subcard-sub">
+                              Scheduled time this week, grouped by label.
                             </p>
                           </div>
+                          <CategoryDoughnut
+                            slices={slices}
+                            totalMinutes={totalSliceMin}
+                          />
                         </div>
 
-                        {balance.week_warnings.length > 0 && (
-                          <ul className="balance-notes">
-                            {balance.week_warnings.map((w) => (
-                              <li key={w.reason_code}>{w.message}</li>
+                        {/* Daily Load — vertical bars with y-axis */}
+                        <div className="balance-subcard">
+                          <div className="balance-subcard-head">
+                            <h4 className="balance-subcard-title">
+                              Daily Load
+                            </h4>
+                            <p className="balance-subcard-sub">
+                              Hours of scheduled time each day.
+                            </p>
+                          </div>
+                          <div className="load-chart">
+                            <div className="load-yaxis">
+                              {[...yTicks].reverse().map((t) => (
+                                <span key={t} className="load-ytick">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="load-plot">
+                              <div className="load-gridlines" aria-hidden>
+                                {yTicks.map((t) => (
+                                  <div key={t} className="load-gridline" />
+                                ))}
+                              </div>
+                              <div className="load-bars">
+                                {balanceDays.map((d, i) => {
+                                  const h = Math.min(
+                                    100,
+                                    (d.total_busy_minutes / maxAxisMin) * 100
+                                  );
+                                  const isPeak =
+                                    i === peakIdx && maxBusyMin > 0;
+                                  return (
+                                    <div className="load-col" key={d.date}>
+                                      <div className="load-bar-wrap">
+                                        <div
+                                          className={`load-bar ${
+                                            isPeak ? "peak" : ""
+                                          }`}
+                                          style={{ height: `${h}%` }}
+                                          title={`${
+                                            Math.round(
+                                              (d.total_busy_minutes / 60) * 10
+                                            ) / 10
+                                          }h scheduled`}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="load-xaxis">
+                            {balanceDays.map((d) => (
+                              <span key={d.date}>
+                                {weekdayShort(d.date)}
+                              </span>
                             ))}
-                          </ul>
-                        )}
-                      </>
-                    );
-                  })()
-                )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom strip: Light–Balanced–Heavy gradient + interpretation */}
+                      <div className="balance-bottom">
+                        <div className="balance-gradient">
+                          <div className="balance-gradient-labels">
+                            <span>Light</span>
+                            <span>Balanced</span>
+                            <span>Heavy</span>
+                          </div>
+                          <div className="balance-gradient-track">
+                            <div
+                              className="balance-gradient-marker"
+                              style={{ left: `${markerPct}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="balance-interpretation">
+                          <div
+                            className={`balance-interpretation-label ${
+                              status.label === "Heavy"
+                                ? "heavy"
+                                : status.label === "Slightly Heavy"
+                                ? "slight-heavy"
+                                : status.label === "Light"
+                                ? "light"
+                                : "balanced"
+                            }`}
+                          >
+                            {status.label}
+                          </div>
+                          <p className="balance-interpretation-detail">
+                            {status.detail}
+                          </p>
+                        </div>
+                      </div>
+
+                      {balance && balance.week_warnings.length > 0 && (
+                        <ul className="balance-notes">
+                          {balance.week_warnings.map((w) => (
+                            <li key={w.reason_code}>{w.message}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -524,5 +641,100 @@ export default function DashboardPage() {
         </>
       )}
     </section>
+  );
+}
+
+// ----- Category doughnut chart -----
+// Small SVG doughnut + legend. Renders nothing alarming when there is no
+// data — the parent already shows a quiet empty state for an empty week.
+
+interface CategoryDoughnutProps {
+  slices: CategorySlice[];
+  totalMinutes: number;
+}
+
+function CategoryDoughnut({ slices, totalMinutes }: CategoryDoughnutProps) {
+  // Layout constants.
+  const SIZE = 168;
+  const STROKE = 26;
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const r = SIZE / 2 - 4;
+  const rInner = r - STROKE;
+
+  if (totalMinutes === 0 || slices.length === 0) {
+    return (
+      <div className="category-chart-empty">
+        No categorized time yet for this week.
+      </div>
+    );
+  }
+
+  let acc = 0;
+  // A single full-circle slice would degenerate when rendered as an arc
+  // (start angle equals end angle). Render it as a complete ring instead.
+  const singleSlice = slices.length === 1;
+
+  return (
+    <div className="category-chart">
+      <svg
+        className="category-chart-svg"
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        role="img"
+        aria-label="Scheduled time grouped by category"
+      >
+        {singleSlice ? (
+          <>
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={slices[0].color}
+              strokeWidth={STROKE}
+            />
+          </>
+        ) : (
+          slices.map((s) => {
+            const startAngle = (acc / totalMinutes) * Math.PI * 2;
+            acc += s.minutes;
+            const endAngle = (acc / totalMinutes) * Math.PI * 2;
+            const d = donutArcPath(cx, cy, r, rInner, startAngle, endAngle);
+            return <path key={s.label} d={d} fill={s.color} />;
+          })
+        )}
+        <text
+          x={cx}
+          y={cy - 3}
+          className="category-chart-center-num"
+          textAnchor="middle"
+        >
+          {formatMinutes(totalMinutes)}
+        </text>
+        <text
+          x={cx}
+          y={cy + 14}
+          className="category-chart-center-label"
+          textAnchor="middle"
+        >
+          this week
+        </text>
+      </svg>
+      <ul className="category-legend">
+        {slices.map((s) => (
+          <li key={s.label} className="category-legend-row">
+            <span
+              className="category-legend-swatch"
+              style={{ background: s.color }}
+              aria-hidden
+            />
+            <span className="category-legend-name">{s.label}</span>
+            <span className="category-legend-value">
+              {formatMinutes(s.minutes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -901,6 +901,148 @@ button:disabled {
   max-width: 56ch;
 }
 
+/* Schedule no-calendars empty state — sits above the calendar grid when
+   a user has not created any calendars yet. Calm, with one clear CTA
+   into Settings. */
+.schedule-empty-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.schedule-empty-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+}
+
+.schedule-empty-body {
+  margin: 0;
+  color: var(--fg-soft);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  max-width: 56ch;
+}
+
+/* Inline category empty-state inside the Add/Edit Event modal — shown
+   when the user has not created any categories yet. */
+.category-empty-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--accent-softer);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+}
+
+.category-empty-link {
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.category-empty-link:hover {
+  text-decoration: underline;
+}
+
+/* Dashboard category doughnut chart + legend. */
+.category-chart {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.category-chart-svg {
+  flex-shrink: 0;
+  width: 168px;
+  height: 168px;
+}
+
+.category-chart-center-num {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 500;
+  fill: var(--fg);
+}
+
+.category-chart-center-label {
+  font-size: 0.7rem;
+  fill: var(--muted);
+}
+
+.category-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.category-legend-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--fg-soft);
+}
+
+.category-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.category-legend-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.category-legend-value {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 168px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .category-chart {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .category-chart-svg {
+    align-self: center;
+  }
+}
+
 /* Category list row — small color swatch next to the name. */
 .category-row-name {
   display: inline-flex;

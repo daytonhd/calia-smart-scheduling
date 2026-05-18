@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   FormEvent,
   PointerEvent as ReactPointerEvent,
@@ -16,11 +17,13 @@ import {
   getRescheduleOptions,
   getWeeklyMetrics,
   listCalendars,
+  listCategories,
   listEvents,
   updateEvent,
 } from "@/lib/api";
 import type {
   Calendar,
+  Category,
   Event,
   EventCreate,
   RescheduleOption,
@@ -387,6 +390,7 @@ export default function SchedulePage() {
   const [calendarFilter, setCalendarFilter] = useState<string>("");
 
   const [calendars, setCalendars] = useState<Calendar[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [metrics, setMetrics] = useState<WeeklyMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -466,13 +470,15 @@ export default function SchedulePage() {
         const startIso = dateInputToNaiveStart(appliedStart);
         // `appliedEnd` is already the exclusive upper bound (start + 7 days).
         const endIso = dateInputToNaiveStart(appliedEnd);
-        const [cals, evs, m] = await Promise.all([
+        const [cals, cats, evs, m] = await Promise.all([
           listCalendars(),
+          listCategories(),
           listEvents({ startTime: startIso, endTime: endIso }),
           getWeeklyMetrics().catch(() => null),
         ]);
         if (cancelled) return;
         setCalendars(cals);
+        setCategories(cats);
         setEvents(evs);
         setMetrics(m);
       } catch (e) {
@@ -641,6 +647,7 @@ export default function SchedulePage() {
   }
 
   function openCreateForm() {
+    if (calendars.length === 0) return;
     resetForm();
     setPanelPos(computeDefaultPanelPos());
     setFormOpen(true);
@@ -1043,7 +1050,14 @@ export default function SchedulePage() {
             type="button"
             className="primary"
             onClick={openCreateForm}
-            disabled={formOpen && editingId == null}
+            disabled={
+              (formOpen && editingId == null) || calendars.length === 0
+            }
+            title={
+              calendars.length === 0
+                ? "Create a calendar in Settings to start scheduling"
+                : undefined
+            }
           >
             + Add Event
           </button>
@@ -1186,25 +1200,46 @@ export default function SchedulePage() {
                     <div className="form-row">
                       <div className="form-field">
                         <label htmlFor="ev-category">Category</label>
-                        <input
-                          id="ev-category"
-                          type="text"
-                          list="ev-category-options"
-                          placeholder="Class, Study, Gym..."
-                          value={form.category}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, category: e.target.value }))
-                          }
-                        />
-                        <datalist id="ev-category-options">
-                          <option value="Class" />
-                          <option value="Study" />
-                          <option value="Gym" />
-                          <option value="Focus block" />
-                          <option value="Appointment" />
-                          <option value="Commute" />
-                          <option value="Personal" />
-                        </datalist>
+                        {categories.length === 0 ? (
+                          <div className="category-empty-hint">
+                            <span>No categories yet.</span>{" "}
+                            <Link
+                              href="/settings"
+                              className="category-empty-link"
+                            >
+                              Add labels in Settings
+                            </Link>
+                          </div>
+                        ) : (
+                          <select
+                            id="ev-category"
+                            value={form.category}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                category: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">(none)</option>
+                            {/* Preserve a legacy/free-form value not in the
+                                user's category list so editing an old event
+                                round-trips cleanly. */}
+                            {form.category &&
+                              !categories.some(
+                                (c) => c.name === form.category
+                              ) && (
+                                <option value={form.category}>
+                                  {form.category}
+                                </option>
+                              )}
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.name}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
 
                       <div className="form-field">
@@ -1564,6 +1599,21 @@ export default function SchedulePage() {
       <div className="page-grid schedule-page-grid">
         {/* Main: weekly calendar grid */}
         <div className="page-main">
+          {!loading && calendars.length === 0 && (
+            <div className="schedule-empty-card">
+              <h3 className="schedule-empty-title">
+                Create a calendar to start scheduling
+              </h3>
+              <p className="schedule-empty-body">
+                Calendars help organize your schedule. Add one in Settings,
+                then come back here to create events.
+              </p>
+              <Link href="/settings" className="cta-link">
+                Manage calendars
+              </Link>
+            </div>
+          )}
+
           <div className="cal-panel">
             {/* Day headers */}
             <div className="cal-row cal-header-row">
