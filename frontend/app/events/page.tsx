@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { RequireAuth } from "../_components/RequireAuth";
 import {
   ApiError,
   createEvent,
@@ -61,6 +62,14 @@ function formatDateTime(iso: string): string {
 }
 
 export default function EventsPage() {
+  return (
+    <RequireAuth>
+      <EventsContent />
+    </RequireAuth>
+  );
+}
+
+function EventsContent() {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [filterCalendarId, setFilterCalendarId] = useState<string>("");

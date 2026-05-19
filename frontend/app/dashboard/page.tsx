@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { RequireAuth } from "../_components/RequireAuth";
 import {
   ApiError,
   getDailyRhythm,
@@ -250,6 +251,14 @@ function computeBalanceStatus(days: ScheduleBalanceDay[]): BalanceStatus {
 }
 
 export default function DashboardPage() {
+  return (
+    <RequireAuth>
+      <DashboardContent />
+    </RequireAuth>
+  );
+}
+
+function DashboardContent() {
   const [todayEvents, setTodayEvents] = useState<Event[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [weekEvents, setWeekEvents] = useState<Event[]>([]);

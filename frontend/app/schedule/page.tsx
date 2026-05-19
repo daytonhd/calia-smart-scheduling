@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { RequireAuth } from "../_components/RequireAuth";
 import {
   ApiError,
   createEvent,
@@ -384,6 +385,14 @@ function clampPanelPos(
 }
 
 export default function SchedulePage() {
+  return (
+    <RequireAuth>
+      <ScheduleContent />
+    </RequireAuth>
+  );
+}
+
+function ScheduleContent() {
   const initial = defaultRange();
   const [appliedStart, setAppliedStart] = useState<string>(initial.start);
   const [appliedEnd, setAppliedEnd] = useState<string>(initial.end);

@@ -1,8 +1,10 @@
 // Thin fetch layer for the Calia backend.
 // Exposes small helpers per resource. No heavy abstractions.
 
+import { getStoredToken } from "./auth";
 import { API_BASE_URL } from "./config";
 import type {
+  AuthResponse,
   Calendar,
   CalendarCreate,
   CalendarUpdate,
@@ -14,12 +16,15 @@ import type {
   Event,
   EventCreate,
   EventUpdate,
+  LoginBody,
   ProposedRescheduleOptionsRequest,
   ProposedRescheduleOptionsResponse,
   RescheduleOptionsRequest,
   RescheduleOptionsResponse,
   ScheduleBalanceResponse,
   ScheduleSummary,
+  SignupBody,
+  User,
   WeeklyMetrics,
 } from "./types";
 
@@ -44,6 +49,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   };
   if (init?.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
+  }
+  // Attach bearer token when present. Callers don't need to opt in — every
+  // authenticated route just works once the user has logged in.
+  if (!headers["Authorization"]) {
+    const token = getStoredToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
   }
 
   let res: Response;
@@ -89,6 +102,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return data as T;
+}
+
+// ----- Auth -----
+// Signup and login return an access token plus the new user. The token is
+// stored separately by AuthProvider — these helpers only speak HTTP.
+
+export function signup(body: SignupBody): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function login(body: LoginBody): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getCurrentUser(): Promise<User> {
+  return request<User>("/auth/me");
 }
 
 // ----- Calendars -----

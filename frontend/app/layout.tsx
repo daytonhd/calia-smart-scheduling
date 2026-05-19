@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import SiteNav from "./_components/SiteNav";
+
+import AppHeader from "./_components/AppHeader";
+import { AuthProvider } from "./_components/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,11 +15,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <header className="app-header">
-          <h1 className="app-brand">Calia</h1>
-          <SiteNav />
-        </header>
-        <main className="site-main">{children}</main>
+        <AuthProvider>
+          <AppHeader />
+          <main className="site-main">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

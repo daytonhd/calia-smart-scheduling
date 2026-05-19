@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { RequireAuth } from "../_components/RequireAuth";
 import {
   ApiError,
   createCalendar,
@@ -73,6 +74,14 @@ function validateRhythm(r: DailyRhythm): string | null {
 }
 
 export default function SettingsPage() {
+  return (
+    <RequireAuth>
+      <SettingsContent />
+    </RequireAuth>
+  );
+}
+
+function SettingsContent() {
   // ----- Calendars -----
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [calendarForm, setCalendarForm] =
