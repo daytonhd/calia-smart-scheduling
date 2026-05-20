@@ -1,11 +1,12 @@
 """Adaptive rescheduling — find replacement slots for one selected event.
 
-Replacement candidates are scanned inside Daily Rhythm suggestion hours
-(8 AM–9 PM by default) via find_available_slots. They preserve the source
-event's duration and avoid existing events and other occupied schedule
-items. legacy availability rows are not consulted. The selected event is
-excluded from the event-overlap check so its current placement does not
-"conflict with itself".
+Replacement candidates are scanned inside the user's Daily Rhythm suggestion
+hours (8 AM–9 PM by default) via find_available_slots. They preserve the
+source event's duration and avoid existing events and other occupied
+schedule items on the user's own calendars. Other users' events are
+invisible to this service. The selected event is excluded from the
+event-overlap check so its current placement does not "conflict with
+itself".
 
 Ranking is simple and deterministic:
   1. Same-day replacement slots (same calendar date as the event's original
@@ -21,6 +22,7 @@ from typing import List, Optional
 
 from sqlmodel import Session
 
+from app.models.calendar import Calendar
 from app.models.event import Event
 from app.services.conflict_detection import find_available_slots
 
@@ -41,9 +43,10 @@ def _rank_replacement_options(
     search_end: datetime,
     max_results: int,
     session: Session,
+    user_id: int,
     exclude_event_id: Optional[int],
 ) -> List[dict]:
-    """Shared core: scan candidate slots and rank them.
+    """Shared core: scan candidate slots for the user and rank them.
 
     Caller is responsible for any 404/validation concerns and for clamping
     max_results before invoking this helper.
@@ -58,6 +61,7 @@ def _rank_replacement_options(
         end_date=scan_end_date,
         max_results=_INTERNAL_SCAN_LIMIT,
         session=session,
+        user_id=user_id,
         exclude_event_id=exclude_event_id,
     )
 
@@ -109,8 +113,9 @@ def find_replacement_slots(
     search_end: datetime,
     max_results: int,
     session: Session,
+    user_id: int,
 ) -> Optional[dict]:
-    """Return ranked replacement options for one event.
+    """Return ranked replacement options for one event owned by the user.
 
     Args:
         event_id:      Existing event id to reschedule.
@@ -119,10 +124,14 @@ def find_replacement_slots(
         max_results:   Maximum number of options to return (clamped to
                        MAX_RESULTS_HARD_CAP, must be >= 1).
         session:       Active database session.
+        user_id:       Authenticated user — the event must belong to one of
+                       this user's calendars; otherwise the function returns
+                       None so the caller can surface a 404.
 
     Returns:
         dict matching RescheduleOptionsResponse, or None if the event does
-        not exist (callers should translate None to a 404).
+        not exist OR does not belong to the user (callers should translate
+        None to a 404).
     """
     if max_results < 1:
         max_results = 1
@@ -131,6 +140,11 @@ def find_replacement_slots(
 
     event = session.get(Event, event_id)
     if event is None:
+        return None
+
+    # Cross-user lookups must look like the event does not exist.
+    calendar = session.get(Calendar, event.calendar_id)
+    if calendar is None or calendar.user_id != user_id:
         return None
 
     duration = event.end_time - event.start_time
@@ -143,6 +157,7 @@ def find_replacement_slots(
         search_end=search_end,
         max_results=max_results,
         session=session,
+        user_id=user_id,
         exclude_event_id=event_id,
     )
 
@@ -162,13 +177,14 @@ def find_replacement_slots_for_proposed(
     search_end: datetime,
     max_results: int,
     session: Session,
+    user_id: int,
 ) -> dict:
     """Return ranked replacement options for an unsaved proposed event.
 
     Mirrors find_replacement_slots but does not require an event_id — the
     proposed event is not stored, so there is nothing to exclude from the
-    overlap check. Caller validates calendar_id and time-range invariants
-    before calling.
+    overlap check. Caller validates calendar ownership and time-range
+    invariants before calling.
 
     Args:
         title:         Proposed event title (echoed back in the response).
@@ -180,6 +196,8 @@ def find_replacement_slots_for_proposed(
         max_results:   Maximum number of options to return (clamped to
                        MAX_RESULTS_HARD_CAP, must be >= 1).
         session:       Active database session.
+        user_id:       Authenticated user — overlap and free-window scans
+                       are bound to this user's own data.
 
     Returns:
         dict matching ProposedRescheduleOptionsResponse.
@@ -199,6 +217,7 @@ def find_replacement_slots_for_proposed(
         search_end=search_end,
         max_results=max_results,
         session=session,
+        user_id=user_id,
         exclude_event_id=None,
     )
 

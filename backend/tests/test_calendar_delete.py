@@ -12,23 +12,23 @@ from app.routers.calendars import delete_calendar
 from .factories import make_calendar, make_event
 
 
-def test_delete_missing_calendar_returns_404(session):
+def test_delete_missing_calendar_returns_404(session, current_user):
     with pytest.raises(HTTPException) as exc:
-        delete_calendar(calendar_id=999, session=session)
+        delete_calendar(calendar_id=999, session=session, current_user=current_user)
 
     assert exc.value.status_code == 404
     assert exc.value.detail == "Calendar not found"
 
 
-def test_delete_calendar_with_no_events_succeeds(session):
+def test_delete_calendar_with_no_events_succeeds(session, current_user):
     cal = make_calendar(session)
 
-    delete_calendar(calendar_id=cal.id, session=session)
+    delete_calendar(calendar_id=cal.id, session=session, current_user=current_user)
 
     assert session.get(Calendar, cal.id) is None
 
 
-def test_delete_calendar_with_events_returns_409_and_preserves_calendar(session):
+def test_delete_calendar_with_events_returns_409_and_preserves_calendar(session, current_user):
     cal = make_calendar(session)
     make_event(
         session,
@@ -38,7 +38,7 @@ def test_delete_calendar_with_events_returns_409_and_preserves_calendar(session)
     )
 
     with pytest.raises(HTTPException) as exc:
-        delete_calendar(calendar_id=cal.id, session=session)
+        delete_calendar(calendar_id=cal.id, session=session, current_user=current_user)
 
     assert exc.value.status_code == 409
     assert exc.value.detail == (

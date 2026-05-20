@@ -67,6 +67,7 @@ def test_slot_suggestion_explanation_uses_clean_wording(session):
         end_date=MONDAY,
         max_results=3,
         session=session,
+        user_id=1,
     )
     assert slots, "expected at least one slot"
     for s in slots:
@@ -92,6 +93,7 @@ def test_saved_replacement_explanation_uses_clean_wording(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
     assert result["options"], "expected at least one option"
     for o in result["options"]:
@@ -107,6 +109,7 @@ def test_proposed_replacement_explanation_uses_clean_wording(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
     assert result["options"], "expected at least one option"
     for o in result["options"]:
@@ -130,7 +133,7 @@ def test_balance_free_minutes_match_daily_rhythm_with_no_availability_rows(
     rhythm_minutes = int(rhythm_minutes)
     assert rhythm_minutes == 780  # sanity check: 8:00-21:00
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
 
     assert len(triage["days"]) == 7
     for day in triage["days"]:
@@ -148,7 +151,7 @@ def test_balance_subtracts_events_from_daily_rhythm_capacity(session):
         end=datetime(2026, 4, 20, 11, 0),
     )
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = next(d for d in triage["days"] if d["date"] == MONDAY)
 
     # 780 (rhythm) − 60 (event) = 720 free.
@@ -167,7 +170,7 @@ def test_balance_event_outside_rhythm_does_not_change_free_capacity(session):
         end=datetime(2026, 4, 20, 23, 0),
     )
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = next(d for d in triage["days"] if d["date"] == MONDAY)
 
     # Event minutes still attributed to the day total (busy), but free
@@ -186,7 +189,7 @@ def test_balance_overload_message_uses_neutral_wording(session):
         end=datetime(2026, 4, 20, 15, 0),  # 6h scheduled → overload
     )
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = next(d for d in triage["days"] if d["date"] == MONDAY)
 
     overloaded = [w for w in monday["warnings"] if w["reason_code"] == "OVERLOADED_DAY"]

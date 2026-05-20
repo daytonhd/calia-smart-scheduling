@@ -17,6 +17,7 @@ def test_outside_daily_rhythm_is_not_a_conflict(session):
         start_time=datetime(2026, 4, 20, 22, 0),
         end_time=datetime(2026, 4, 20, 23, 0),
         session=session,
+        user_id=1,
     )
 
     assert conflicts == []
@@ -29,6 +30,7 @@ def test_weekday_with_no_setup_is_not_a_conflict(session):
         start_time=datetime(2026, 4, 21, 10, 0),
         end_time=datetime(2026, 4, 21, 11, 0),
         session=session,
+        user_id=1,
     )
 
     assert conflicts == []
@@ -46,7 +48,7 @@ def test_no_outside_availability_reason_code_returned(session):
     ]
 
     for start, end in placements:
-        conflicts = check_all_conflicts(start_time=start, end_time=end, session=session)
+        conflicts = check_all_conflicts(start_time=start, end_time=end, session=session, user_id=1)
         codes = [c.reason_code for c in conflicts]
         assert "OUTSIDE_AVAILABILITY" not in codes
 
@@ -57,6 +59,7 @@ def test_clean_placement_inside_daily_rhythm(session):
         start_time=datetime(2026, 4, 20, 10, 0),
         end_time=datetime(2026, 4, 20, 11, 0),
         session=session,
+        user_id=1,
     )
 
     assert conflicts == []

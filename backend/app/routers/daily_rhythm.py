@@ -1,7 +1,8 @@
-"""Daily Rhythm endpoints — read and update the single MVP user's rhythm.
+"""Daily Rhythm endpoints — read and update the authenticated user's rhythm.
 
 Daily Rhythm is not "availability": these endpoints only store the user's
-awake/suggestion hours. Event create/update is never gated on them.
+awake/suggestion hours. Event create/update is never gated on them. Each
+user has their own DailyRhythm row.
 """
 
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from sqlmodel import Session
 
 from app.database import get_session
 from app.models.daily_rhythm import DailyRhythm
+from app.models.user import User
+from app.routers.auth import get_current_user
 from app.schemas.daily_rhythm import (
     DailyRhythmRead,
     DailyRhythmUpdate,
@@ -22,7 +25,6 @@ from app.services.daily_rhythm import (
     DEFAULT_AWAKE_START,
     DEFAULT_SUGGESTIONS_END,
     DEFAULT_SUGGESTIONS_START,
-    MVP_USER_ID,
     get_daily_rhythm_settings,
 )
 
@@ -48,13 +50,16 @@ def _defaults_read() -> DailyRhythmRead:
 
 
 @router.get("", response_model=DailyRhythmRead)
-def get_daily_rhythm(session: Session = Depends(get_session)):
-    """Return the persisted Daily Rhythm for the MVP user.
+def get_daily_rhythm(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the persisted Daily Rhythm for the authenticated user.
 
-    When no row has been saved yet, returns the system defaults
+    When no row has been saved yet for this user, returns the system defaults
     (07:00–23:00 awake, 08:00–21:00 suggestions) without persisting them.
     """
-    row = get_daily_rhythm_settings(session)
+    row = get_daily_rhythm_settings(session, current_user.id)
     if row is None:
         return _defaults_read()
     return _to_read(row)
@@ -64,15 +69,16 @@ def get_daily_rhythm(session: Session = Depends(get_session)):
 def update_daily_rhythm(
     body: DailyRhythmUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create or update the single MVP user's Daily Rhythm.
+    """Create or update the current user's Daily Rhythm.
 
     The request body is fully validated (see DailyRhythmUpdate): awake range,
     suggestion range, and suggestion hours fitting inside awake hours.
     """
-    row = get_daily_rhythm_settings(session)
+    row = get_daily_rhythm_settings(session, current_user.id)
     if row is None:
-        row = DailyRhythm(user_id=MVP_USER_ID)
+        row = DailyRhythm(user_id=current_user.id)
 
     row.awake_start_time = parse_hhmm(body.awake_start_time)
     row.awake_end_time = parse_hhmm(body.awake_end_time)

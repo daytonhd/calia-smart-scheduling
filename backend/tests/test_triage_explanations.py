@@ -35,7 +35,7 @@ def test_overloaded_day_warning_code_and_message(session):
                start=datetime(2026, 4, 20, 13, 0),
                end=datetime(2026, 4, 20, 16, 0))   # 3h
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     warnings = [w for w in monday["warnings"] if w["reason_code"] == "OVERLOADED_DAY"]
@@ -52,7 +52,7 @@ def test_fragmented_day_warning_code_and_message(session):
                    start=datetime(2026, 4, 20, hh, 30),
                    end=datetime(2026, 4, 20, hh + 1, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     warnings = [w for w in monday["warnings"] if w["reason_code"] == "FRAGMENTED_DAY"]
@@ -69,7 +69,7 @@ def test_weak_buffer_warning_code_and_message(session):
                start=datetime(2026, 4, 21, 8, 0),
                end=datetime(2026, 4, 21, 20, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     tuesday = _day(triage, date(2026, 4, 21))
 
     warnings = [w for w in tuesday["warnings"] if w["reason_code"] == "WEAK_BUFFER"]
@@ -85,8 +85,8 @@ def test_longest_free_window_is_deterministic(session):
                start=datetime(2026, 4, 20, 12, 0),
                end=datetime(2026, 4, 20, 12, 30))
 
-    a = compute_weekly_triage(session, week_start=MONDAY)
-    b = compute_weekly_triage(session, week_start=MONDAY)
+    a = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
+    b = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
 
     a_lf = [d["longest_free_window_minutes"] for d in a["days"]]
     b_lf = [d["longest_free_window_minutes"] for d in b["days"]]
@@ -105,8 +105,8 @@ def test_warning_messages_are_deterministic(session):
                start=datetime(2026, 4, 20, 9, 0),
                end=datetime(2026, 4, 20, 15, 0))   # 6h overload
 
-    a = compute_weekly_triage(session, week_start=MONDAY)
-    b = compute_weekly_triage(session, week_start=MONDAY)
+    a = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
+    b = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
 
     assert _day(a, MONDAY)["warnings"] == _day(b, MONDAY)["warnings"]
 

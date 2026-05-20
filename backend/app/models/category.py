@@ -6,21 +6,27 @@ replacement options, blocking, or any schedule metric — every event is
 treated as occupied time regardless of category. The Event.category column
 remains a plain optional string for MVP compatibility; this table only
 manages the set of labels a user can pick from.
+
+Each category belongs to exactly one user. Category names are unique per
+user — two different users may each have a "Study" category, but one user
+may not have two categories named "Study".
 """
 
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
 class Category(SQLModel, table=True):
     __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_categories_user_name"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    # Single-user MVP — auth deferred. Defaults to the seeded MVP user id,
-    # matching the convention used by DailyRhythm.
-    user_id: int = Field(default=1, nullable=False, index=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     name: str = Field(max_length=120, nullable=False)
     color: Optional[str] = Field(
         default=None,

@@ -21,9 +21,9 @@ from app.services.conflict_detection import find_available_slots
 MONDAY = date(2026, 4, 20)
 
 
-def test_get_returns_defaults_when_no_row(session):
+def test_get_returns_defaults_when_no_row(session, current_user):
     """GET with no persisted row returns the system defaults, unpersisted."""
-    result = get_daily_rhythm(session)
+    result = get_daily_rhythm(session, current_user)
 
     assert result.awake_start_time == "07:00"
     assert result.awake_end_time == "23:00"
@@ -34,7 +34,7 @@ def test_get_returns_defaults_when_no_row(session):
     assert session.exec(select(DailyRhythm)).all() == []
 
 
-def test_patch_saves_valid_values(session):
+def test_patch_saves_valid_values(session, current_user):
     body = DailyRhythmUpdate(
         awake_start_time="06:30",
         awake_end_time="22:30",
@@ -42,7 +42,7 @@ def test_patch_saves_valid_values(session):
         suggestions_end_time="20:00",
     )
 
-    result = update_daily_rhythm(body, session)
+    result = update_daily_rhythm(body, session, current_user)
 
     assert result.awake_start_time == "06:30"
     assert result.awake_end_time == "22:30"
@@ -50,7 +50,7 @@ def test_patch_saves_valid_values(session):
     assert result.suggestions_end_time == "20:00"
 
 
-def test_get_returns_saved_values(session):
+def test_get_returns_saved_values(session, current_user):
     update_daily_rhythm(
         DailyRhythmUpdate(
             awake_start_time="05:00",
@@ -59,9 +59,10 @@ def test_get_returns_saved_values(session):
             suggestions_end_time="19:30",
         ),
         session,
+        current_user,
     )
 
-    result = get_daily_rhythm(session)
+    result = get_daily_rhythm(session, current_user)
 
     assert result.awake_start_time == "05:00"
     assert result.awake_end_time == "21:00"
@@ -69,7 +70,7 @@ def test_get_returns_saved_values(session):
     assert result.suggestions_end_time == "19:30"
 
 
-def test_patch_updates_single_row_does_not_duplicate(session):
+def test_patch_updates_single_row_does_not_duplicate(session, current_user):
     """The MVP keeps one active row — a second PATCH updates, not inserts."""
     update_daily_rhythm(
         DailyRhythmUpdate(
@@ -79,6 +80,7 @@ def test_patch_updates_single_row_does_not_duplicate(session):
             suggestions_end_time="21:00",
         ),
         session,
+        current_user,
     )
     update_daily_rhythm(
         DailyRhythmUpdate(
@@ -88,11 +90,12 @@ def test_patch_updates_single_row_does_not_duplicate(session):
             suggestions_end_time="18:00",
         ),
         session,
+        current_user,
     )
 
     rows = session.exec(select(DailyRhythm)).all()
     assert len(rows) == 1
-    assert get_daily_rhythm(session).suggestions_end_time == "18:00"
+    assert get_daily_rhythm(session, current_user).suggestions_end_time == "18:00"
 
 
 def test_patch_rejects_invalid_awake_range():
@@ -146,6 +149,7 @@ def test_scheduling_works_with_no_rhythm_row(session):
         end_date=MONDAY,
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected slots in the default suggestion window"
@@ -155,7 +159,7 @@ def test_scheduling_works_with_no_rhythm_row(session):
         assert s.end_time <= datetime.combine(MONDAY, time(21, 0))
 
 
-def test_scheduling_uses_saved_suggestion_hours(session):
+def test_scheduling_uses_saved_suggestion_hours(session, current_user):
     """After saving a narrower suggestion window, slot suggestions are
     bounded by the saved hours, not the defaults."""
     update_daily_rhythm(
@@ -166,6 +170,7 @@ def test_scheduling_uses_saved_suggestion_hours(session):
             suggestions_end_time="14:00",
         ),
         session,
+        current_user,
     )
 
     slots = find_available_slots(
@@ -174,6 +179,7 @@ def test_scheduling_uses_saved_suggestion_hours(session):
         end_date=MONDAY,
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected slots in the saved suggestion window"

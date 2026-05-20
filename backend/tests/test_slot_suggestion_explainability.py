@@ -29,6 +29,7 @@ def test_each_slot_has_reason_and_explanation(session):
         end_date=MONDAY,
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected at least one slot"
@@ -52,6 +53,7 @@ def test_default_slot_explanations_avoid_legacy_language(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert len(slots) >= 2, "need multiple slots so the assertion is meaningful"
@@ -66,6 +68,7 @@ def test_explanation_is_deterministic(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
     b = find_available_slots(
         duration_minutes=60,
@@ -73,6 +76,7 @@ def test_explanation_is_deterministic(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
     assert [(s.start_time, s.end_time, s.reason_code, s.explanation) for s in a] == \
            [(s.start_time, s.end_time, s.reason_code, s.explanation) for s in b]

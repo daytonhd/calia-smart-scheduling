@@ -28,6 +28,7 @@ def test_event_overlap_detail_has_event_id_and_human_message(session):
         start_time=datetime(2026, 4, 20, 13, 30),
         end_time=datetime(2026, 4, 20, 14, 30),
         session=session,
+        user_id=1,
     )
 
     overlap = next(c for c in conflicts if c.reason_code == "EVENT_OVERLAP")
@@ -47,6 +48,7 @@ def test_outside_availability_is_no_longer_returned(session):
         start_time=datetime(2026, 4, 23, 10, 0),
         end_time=datetime(2026, 4, 23, 11, 0),
         session=session,
+        user_id=1,
     )
 
     assert conflicts == []
@@ -73,6 +75,7 @@ def test_returns_all_overlapping_events(session):
         start_time=datetime(2026, 4, 20, 10, 0),
         end_time=datetime(2026, 4, 20, 10, 45),
         session=session,
+        user_id=1,
     )
 
     codes = sorted({c.reason_code for c in conflicts})
@@ -96,10 +99,12 @@ def test_messages_are_deterministic(session):
         datetime(2026, 4, 20, 13, 30),
         datetime(2026, 4, 20, 14, 30),
         session,
+        user_id=1,
     )
     b = check_all_conflicts(
         datetime(2026, 4, 20, 13, 30),
         datetime(2026, 4, 20, 14, 30),
         session,
+        user_id=1,
     )
     assert [c.message for c in a] == [c.message for c in b]

@@ -40,6 +40,7 @@ def test_study_event_blocks_slot_suggestions(session):
         end_date=MONDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected slot suggestions to be generated"
@@ -67,6 +68,7 @@ def test_gym_event_blocks_slot_suggestions(session):
         end_date=MONDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected slot suggestions to be generated"
@@ -104,6 +106,7 @@ def test_personal_event_blocks_replacement_options(session):
         search_end=datetime(2026, 4, 20, 21, 0),
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     options = result["options"]
@@ -132,14 +135,14 @@ def test_conflict_detection_does_not_depend_on_category(session):
         session, cal.id, title="Unavailable block",
         category="Unavailable", **placement,
     )
-    with_category = check_all_conflicts(session=session, **probe)
+    with_category = check_all_conflicts(session=session, user_id=1, **probe)
 
     session.delete(categorized)
     session.commit()
 
     # Same placement, no category at all → must behave identically.
     make_event(session, cal.id, title="Plain event", category=None, **placement)
-    without_category = check_all_conflicts(session=session, **probe)
+    without_category = check_all_conflicts(session=session, user_id=1, **probe)
 
     assert [c.reason_code for c in with_category] == ["EVENT_OVERLAP"]
     assert [c.reason_code for c in without_category] == ["EVENT_OVERLAP"]

@@ -68,6 +68,7 @@ def test_saved_replacement_works_with_zero_availability_rows(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result is not None
@@ -88,6 +89,7 @@ def test_saved_replacement_stays_within_daily_rhythm(session):
         search_end=datetime(2026, 4, 22, 23, 59),
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"
@@ -109,6 +111,7 @@ def test_saved_replacement_preserves_duration(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result["duration_minutes"] == 90
@@ -143,6 +146,7 @@ def test_saved_replacement_avoids_existing_events(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -170,6 +174,7 @@ def test_saved_replacement_explanation_mentions_no_availability_windows(session)
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"
@@ -193,6 +198,7 @@ def test_saved_replacement_explanations_avoid_legacy_language(session):
         search_end=datetime(2026, 4, 22, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result is not None
@@ -217,6 +223,7 @@ def test_proposed_replacement_works_with_zero_availability_rows(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert len(result["options"]) >= 1
@@ -231,6 +238,7 @@ def test_proposed_replacement_stays_within_daily_rhythm(session):
         search_end=datetime(2026, 4, 22, 23, 59),
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"
@@ -248,6 +256,7 @@ def test_proposed_replacement_preserves_duration_from_proposed_range(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result["duration_minutes"] == 105
@@ -272,6 +281,7 @@ def test_proposed_replacement_avoids_existing_events(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=50,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -290,6 +300,7 @@ def test_proposed_replacement_explanation_mentions_no_availability_windows(sessi
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"
@@ -308,6 +319,7 @@ def test_proposed_replacement_explanations_avoid_legacy_language(session):
         search_end=datetime(2026, 4, 22, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     options = result["options"]

@@ -46,7 +46,7 @@ MONDAY = date(2026, 4, 20)
 # ---------------------------------------------------------------------------
 
 
-def test_event_creation_succeeds_with_zero_availability_rows(session):
+def test_event_creation_succeeds_with_zero_availability_rows(session, current_user):
     cal = make_calendar(session)
     body = EventCreate(
         calendar_id=cal.id,
@@ -55,7 +55,7 @@ def test_event_creation_succeeds_with_zero_availability_rows(session):
         end_time=datetime(2026, 4, 20, 11, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.start_time == datetime(2026, 4, 20, 10, 0)
@@ -66,7 +66,7 @@ def test_event_creation_succeeds_with_zero_availability_rows(session):
 # ---------------------------------------------------------------------------
 
 
-def test_event_creation_succeeds_outside_suggestion_hours_inside_awake(session):
+def test_event_creation_succeeds_outside_suggestion_hours_inside_awake(session, current_user):
     """22:00-23:00 falls outside Suggestion hours (8:00-21:00) but inside
     Awake hours (7:00-23:00) — should succeed."""
     cal = make_calendar(session)
@@ -77,11 +77,11 @@ def test_event_creation_succeeds_outside_suggestion_hours_inside_awake(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
     assert event.id is not None
 
 
-def test_event_creation_succeeds_outside_awake_hours(session):
+def test_event_creation_succeeds_outside_awake_hours(session, current_user):
     """5:00-6:00 is outside Awake hours (7:00-23:00) entirely — should
     still succeed, since Awake/Suggestion hours never gate manual events."""
     cal = make_calendar(session)
@@ -92,11 +92,11 @@ def test_event_creation_succeeds_outside_awake_hours(session):
         end_time=datetime(2026, 4, 20, 6, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
     assert event.id is not None
 
 
-def test_event_creation_succeeds_late_night_after_awake_end(session):
+def test_event_creation_succeeds_late_night_after_awake_end(session, current_user):
     """23:30-23:59 is past Awake end (23:00) — manual event still allowed."""
     cal = make_calendar(session)
     body = EventCreate(
@@ -106,7 +106,7 @@ def test_event_creation_succeeds_late_night_after_awake_end(session):
         end_time=datetime(2026, 4, 20, 23, 59),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
     assert event.id is not None
 
 
@@ -122,6 +122,7 @@ def test_slot_suggestions_work_with_zero_availability_rows(session):
         end_date=MONDAY,
         max_results=5,
         session=session,
+        user_id=1,
     )
 
     assert len(slots) == 5
@@ -140,6 +141,7 @@ def test_suggested_slots_stay_inside_suggestion_hours(session):
         end_date=MONDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     rhythm_start = datetime.combine(MONDAY, DEFAULT_SUGGESTIONS_START)
@@ -171,6 +173,7 @@ def test_saved_event_replacement_works_with_zero_availability_rows(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result is not None
@@ -196,6 +199,7 @@ def test_proposed_event_replacement_works_with_zero_availability_rows(session):
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert len(result["options"]) >= 1
@@ -211,7 +215,7 @@ def test_proposed_event_replacement_works_with_zero_availability_rows(session):
 # ---------------------------------------------------------------------------
 
 
-def test_conflict_check_no_availability_rows_returns_clean(session):
+def test_conflict_check_no_availability_rows_returns_clean(session, current_user):
     cal = make_calendar(session)
     body = ConflictCheckRequest(
         calendar_id=cal.id,
@@ -219,13 +223,13 @@ def test_conflict_check_no_availability_rows_returns_clean(session):
         end_time=datetime(2026, 4, 23, 11, 0),
     )
 
-    response = check_conflict(body, session)
+    response = check_conflict(body, session, current_user)
 
     assert response.has_conflicts is False
     assert response.conflicts == []
 
 
-def test_conflict_check_outside_suggestion_hours_returns_clean(session):
+def test_conflict_check_outside_suggestion_hours_returns_clean(session, current_user):
     """A non-overlapping placement outside Suggestion hours produces no
     active conflicts — including no OUTSIDE_AVAILABILITY."""
     cal = make_calendar(session)
@@ -245,7 +249,7 @@ def test_conflict_check_outside_suggestion_hours_returns_clean(session):
             start_time=start,
             end_time=end,
         )
-        response = check_conflict(body, session)
+        response = check_conflict(body, session, current_user)
         codes = [c.reason_code for c in response.conflicts]
         assert "OUTSIDE_AVAILABILITY" not in codes
         assert response.has_conflicts is False
@@ -259,7 +263,7 @@ def test_conflict_check_outside_suggestion_hours_returns_clean(session):
 def test_schedule_balance_uses_default_suggestion_capacity(session):
     """With zero AvailabilityWindow rows and zero events, every day's free
     capacity equals the Suggestion-hour duration (8:00-21:00 = 780 min)."""
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
 
     assert len(triage["days"]) == 7
     for day in triage["days"]:
@@ -277,7 +281,7 @@ def test_schedule_balance_free_minutes_reflect_events(session):
         end=datetime(2026, 4, 20, 11, 0),
     )
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = next(d for d in triage["days"] if d["date"] == MONDAY)
 
     assert monday["scheduled_minutes"] == 60
@@ -308,6 +312,7 @@ def test_slot_explanation_omits_availability(session):
         end_date=MONDAY,
         max_results=3,
         session=session,
+        user_id=1,
     )
     assert slots, "expected at least one slot"
     for s in slots:
@@ -330,6 +335,7 @@ def test_saved_replacement_explanation_omits_availability(
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"
@@ -348,6 +354,7 @@ def test_proposed_replacement_explanation_omits_availability(
         search_end=datetime(2026, 4, 20, 23, 59),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert result["options"], "expected at least one option"

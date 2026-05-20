@@ -12,7 +12,7 @@ SUNDAY = date(2026, 4, 26)
 
 
 def test_empty_week_returns_zero_metrics(session):
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
     assert m["week_start"] == MONDAY
     assert m["week_end"] == SUNDAY
     assert m["total_events"] == 0
@@ -23,7 +23,7 @@ def test_empty_week_returns_zero_metrics(session):
 
 def test_week_start_snaps_to_monday(session):
     # Passing a Wednesday should snap to that week's Monday.
-    m = compute_weekly_metrics(session, week_start=date(2026, 4, 22))
+    m = compute_weekly_metrics(session, week_start=date(2026, 4, 22), user_id=1)
     assert m["week_start"] == MONDAY
     assert m["week_end"] == SUNDAY
 
@@ -43,7 +43,7 @@ def test_counts_events_and_minutes(session):
         end=datetime(2026, 4, 22, 15, 30),
     )
 
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
 
     assert m["total_events"] == 2
     assert m["total_scheduled_minutes"] == 150
@@ -66,7 +66,7 @@ def test_intervals_outside_week_are_ignored(session):
         end=datetime(2026, 4, 27, 11, 0),
     )
 
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
     assert m["total_events"] == 0
     assert m["total_scheduled_minutes"] == 0
 
@@ -81,7 +81,7 @@ def test_interval_is_clipped_to_week_boundary(session):
         end=datetime(2026, 4, 27, 1, 0),
     )
 
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
 
     assert m["total_events"] == 1
     assert m["total_scheduled_minutes"] == 60
@@ -99,7 +99,7 @@ def test_metrics_compute_with_no_availability_setup(session):
         end=datetime(2026, 4, 20, 10, 0),
     )
 
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
 
     assert m["total_events"] == 1
     assert m["total_scheduled_minutes"] == 60
@@ -126,7 +126,7 @@ def test_metrics_include_events_outside_daily_rhythm_suggestion_hours(session):
         end=datetime(2026, 4, 21, 23, 0),
     )
 
-    m = compute_weekly_metrics(session, week_start=MONDAY)
+    m = compute_weekly_metrics(session, week_start=MONDAY, user_id=1)
 
     assert m["total_events"] == 2
     assert m["total_scheduled_minutes"] == 120

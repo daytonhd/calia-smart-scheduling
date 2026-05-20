@@ -30,6 +30,7 @@ def test_returns_slots_with_no_setup(session):
         end_date=MONDAY,
         max_results=5,
         session=session,
+        user_id=1,
     )
 
     assert len(slots) == 5
@@ -45,6 +46,7 @@ def test_slots_stay_within_daily_rhythm_hours(session):
         end_date=TUESDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     assert slots, "expected slots to be generated"
@@ -63,6 +65,7 @@ def test_thirty_minute_grid_inside_rhythm_window(session):
         end_date=MONDAY,
         max_results=4,
         session=session,
+        user_id=1,
     )
 
     expected_starts = [
@@ -81,6 +84,7 @@ def test_max_results_is_honored(session):
         end_date=MONDAY,
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert len(slots) == 3
@@ -104,6 +108,7 @@ def test_slot_touching_event_end_boundary_is_valid(session):
         end_date=MONDAY,
         max_results=2,
         session=session,
+        user_id=1,
     )
 
     # 8:00-9:00 grid candidate overlaps the event; 8:30-9:30 also overlaps.
@@ -128,6 +133,7 @@ def test_slots_avoid_existing_events(session):
         end_date=MONDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     for s in slots:
@@ -154,6 +160,7 @@ def test_slot_touching_event_boundary_is_valid(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     # 9:00-10:00 ends at event start — not overlap → valid.
@@ -179,6 +186,7 @@ def test_empty_when_window_fully_occupied(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
     assert slots == []
 
@@ -192,6 +200,7 @@ def test_duration_longer_than_rhythm_window_returns_empty(session):
         end_date=MONDAY,
         max_results=10,
         session=session,
+        user_id=1,
     )
     assert slots == []
 
@@ -204,6 +213,7 @@ def test_scans_each_day_in_range(session):
         end_date=TUESDAY,
         max_results=100,
         session=session,
+        user_id=1,
     )
 
     days_seen = {s.start_time.date() for s in slots}

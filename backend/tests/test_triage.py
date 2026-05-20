@@ -28,7 +28,7 @@ def _day(triage, d: date):
 def test_empty_low_data_week_is_clean(session):
     """No events → each day is fully free inside the Daily Rhythm
     window (8:00–21:00 = 780 min) and there are no warnings."""
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
 
     assert triage["week_start"] == MONDAY
     assert triage["week_end"] == SUNDAY
@@ -59,7 +59,7 @@ def test_overloaded_day_detection(session):
                start=datetime(2026, 4, 20, 13, 0),
                end=datetime(2026, 4, 20, 16, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     assert monday["scheduled_minutes"] == 360
@@ -78,7 +78,7 @@ def test_overloaded_uses_events_only(session):
                start=datetime(2026, 4, 20, 13, 0),
                end=datetime(2026, 4, 20, 16, 0))   # 3h
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     assert monday["scheduled_minutes"] == 360
@@ -105,7 +105,7 @@ def test_fragmented_day_detection(session):
                start=datetime(2026, 4, 20, 12, 30),
                end=datetime(2026, 4, 20, 13, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     small_count = sum(
@@ -126,7 +126,7 @@ def test_weak_buffer_detection(session):
                start=datetime(2026, 4, 21, 8, 0),
                end=datetime(2026, 4, 21, 20, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     tuesday = _day(triage, date(2026, 4, 21))
 
     assert tuesday["free_minutes"] < WEAK_BUFFER_FREE_MINUTES
@@ -143,7 +143,7 @@ def test_longest_free_window_calculation(session):
                start=datetime(2026, 4, 20, 12, 0),
                end=datetime(2026, 4, 20, 12, 30))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     assert monday["longest_free_window_minutes"] == 510
@@ -152,7 +152,7 @@ def test_longest_free_window_calculation(session):
 def test_unscheduled_day_not_flagged_weak_buffer(session):
     """A day with zero events has the full Daily Rhythm window free
     (780 min) — well above the weak-buffer threshold."""
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
 
     # 13h * 60 = 780 min free (the full 8:00-21:00 window).
@@ -168,7 +168,7 @@ def test_busy_minutes_clipped_to_day_boundary(session):
                start=datetime(2026, 4, 20, 23, 0),
                end=datetime(2026, 4, 21, 2, 0))
 
-    triage = compute_weekly_triage(session, week_start=MONDAY)
+    triage = compute_weekly_triage(session, week_start=MONDAY, user_id=1)
     monday = _day(triage, MONDAY)
     tuesday = _day(triage, date(2026, 4, 21))
 

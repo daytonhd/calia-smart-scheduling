@@ -32,7 +32,7 @@ def _rhythm_end(d: date) -> datetime:
 
 def test_no_data_returns_full_daily_rhythm_window(session):
     """With no events, the full Daily Rhythm window for each day is free."""
-    windows = find_free_windows(MONDAY, MONDAY, session)
+    windows = find_free_windows(MONDAY, MONDAY, session, user_id=1)
 
     assert len(windows) == 1
     assert windows[0].start_time == _rhythm_start(MONDAY)
@@ -48,7 +48,7 @@ def test_event_splits_daily_rhythm_window(session):
         end=datetime(2026, 4, 20, 13, 0),
     )
 
-    windows = find_free_windows(MONDAY, MONDAY, session)
+    windows = find_free_windows(MONDAY, MONDAY, session, user_id=1)
 
     assert [(w.start_time, w.end_time) for w in windows] == [
         (_rhythm_start(MONDAY), datetime(2026, 4, 20, 12, 0)),
@@ -66,7 +66,7 @@ def test_event_touching_window_edge_does_not_shrink_available(session):
         end=datetime(2026, 4, 20, 8, 0),  # touches DEFAULT_SUGGESTIONS_START
     )
 
-    windows = find_free_windows(MONDAY, MONDAY, session)
+    windows = find_free_windows(MONDAY, MONDAY, session, user_id=1)
 
     assert len(windows) == 1
     assert windows[0].start_time == _rhythm_start(MONDAY)
@@ -89,7 +89,7 @@ def test_overlapping_occupancies_merge(session):
         end=datetime(2026, 4, 20, 13, 0),
     )
 
-    windows = find_free_windows(MONDAY, MONDAY, session)
+    windows = find_free_windows(MONDAY, MONDAY, session, user_id=1)
 
     assert [(w.start_time, w.end_time) for w in windows] == [
         (_rhythm_start(MONDAY), datetime(2026, 4, 20, 10, 0)),
@@ -99,7 +99,7 @@ def test_overlapping_occupancies_merge(session):
 
 def test_multi_day_range_emits_one_window_per_day(session):
     """Every day in the range gets its Daily Rhythm window — no day is skipped."""
-    windows = find_free_windows(MONDAY, TUESDAY, session)
+    windows = find_free_windows(MONDAY, TUESDAY, session, user_id=1)
 
     assert [(w.start_time, w.end_time) for w in windows] == [
         (_rhythm_start(MONDAY), _rhythm_end(MONDAY)),
@@ -116,7 +116,7 @@ def test_event_filling_entire_window_yields_no_free_time(session):
         end=_rhythm_end(MONDAY),
     )
 
-    assert find_free_windows(MONDAY, MONDAY, session) == []
+    assert find_free_windows(MONDAY, MONDAY, session, user_id=1) == []
 
 
 def test_events_outside_rhythm_window_are_ignored(session):
@@ -136,7 +136,7 @@ def test_events_outside_rhythm_window_are_ignored(session):
         end=datetime(2026, 4, 20, 23, 0),
     )
 
-    windows = find_free_windows(MONDAY, MONDAY, session)
+    windows = find_free_windows(MONDAY, MONDAY, session, user_id=1)
 
     assert len(windows) == 1
     assert windows[0].start_time == _rhythm_start(MONDAY)

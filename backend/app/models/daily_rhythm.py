@@ -1,7 +1,7 @@
-"""DailyRhythm model — persisted awake hours and suggestion hours.
+"""DailyRhythm model — persisted awake hours and suggestion hours per user.
 
-Single-user MVP: there is one active Daily Rhythm row (user_id = 1). When no
-row exists, callers fall back to the system defaults in
+Each user has at most one active DailyRhythm row. When no row exists for the
+current user, callers fall back to the system defaults in
 app.services.daily_rhythm. Daily Rhythm is not "availability" — it describes
 the shape of the user's day and bounds where suggestions land.
 """
@@ -16,8 +16,7 @@ class DailyRhythm(SQLModel, table=True):
     __tablename__ = "daily_rhythm"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    # Single-user MVP — auth deferred. Defaults to the seeded MVP user id.
-    user_id: int = Field(default=1, nullable=False)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     awake_start_time: time = Field(nullable=False)
     awake_end_time: time = Field(nullable=False)
     suggestions_start_time: time = Field(nullable=False)

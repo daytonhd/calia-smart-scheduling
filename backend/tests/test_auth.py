@@ -82,9 +82,25 @@ def test_signup_hashes_password_not_plaintext(session):
     assert stored.hashed_password.startswith("$2")
 
 
-def test_signup_does_not_create_calendars(session):
-    signup(_signup_body(), session)
-    assert session.exec(select(Calendar)).all() == []
+def test_signup_creates_exactly_one_default_calendar(session):
+    response = signup(_signup_body(), session)
+
+    calendars = session.exec(select(Calendar)).all()
+    assert len(calendars) == 1
+    cal = calendars[0]
+    assert cal.user_id == response.user.id
+    assert cal.name == "Main calendar"
+
+
+def test_signup_default_calendar_is_not_shared_between_users(session):
+    a = signup(_signup_body(email="a@example.com"), session)
+    b = signup(_signup_body(email="b@example.com"), session)
+
+    cals = session.exec(select(Calendar)).all()
+    # Two users → two distinct default calendars, one per user.
+    assert len(cals) == 2
+    owners = sorted({c.user_id for c in cals})
+    assert owners == sorted([a.user.id, b.user.id])
 
 
 def test_signup_does_not_create_categories(session):

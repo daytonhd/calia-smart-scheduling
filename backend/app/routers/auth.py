@@ -1,8 +1,8 @@
 """Auth endpoints — signup, login, current user.
 
 Email/password auth for the MVP. JWT bearer tokens are minted on signup and
-login; the current-user dependency below is the reusable hook future routes
-should depend on once multi-user data isolation lands.
+login; the current-user dependency below is the reusable hook every other
+router depends on for data isolation.
 """
 
 from typing import Optional
@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app.models.calendar import Calendar
 from app.models.daily_rhythm import DailyRhythm
 from app.models.user import User
 from app.schemas.auth import (
@@ -35,6 +36,10 @@ from app.services.daily_rhythm import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Generic name for the calendar every new user receives on signup. Each
+# user's default calendar is owned by them; the name is not globally unique.
+DEFAULT_CALENDAR_NAME = "Main calendar"
 
 # `auto_error=False` so missing headers surface as our own 401, not 403.
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -91,10 +96,12 @@ def get_current_user(
     status_code=status.HTTP_201_CREATED,
 )
 def signup(body: SignupRequest, session: Session = Depends(get_session)) -> AuthResponse:
-    """Create a new user, seed their Daily Rhythm defaults, and issue a token.
+    """Create a new user, seed their default calendar and Daily Rhythm, issue a token.
 
-    Does not create default calendars, categories, events, or summaries —
-    auth MVP keeps account creation deliberately minimal.
+    Each new user gets exactly one default calendar ("Main calendar") owned
+    by them and their Daily Rhythm defaults. No categories, events, or
+    summaries are created — auth MVP keeps account creation deliberately
+    minimal.
     """
     email = normalize_email(body.email)
 
@@ -114,8 +121,16 @@ def signup(body: SignupRequest, session: Session = Depends(get_session)) -> Auth
     session.commit()
     session.refresh(user)
 
+    # Exactly one default calendar per new user — owned by them, not shared.
+    session.add(
+        Calendar(
+            user_id=user.id,
+            name=DEFAULT_CALENDAR_NAME,
+        )
+    )
+
     # Seed Daily Rhythm with system defaults for the new user so their first
-    # GET /daily-rhythm returns their own row, not the legacy single-user row.
+    # GET /daily-rhythm returns their own row.
     session.add(
         DailyRhythm(
             user_id=user.id,

@@ -25,7 +25,7 @@ from .factories import make_calendar, make_event
 # ---------------------------------------------------------------------------
 
 
-def test_post_events_allows_outside_daily_rhythm_hours(session):
+def test_post_events_allows_outside_daily_rhythm_hours(session, current_user):
     """An event placed outside Daily Rhythm hours succeeds."""
     cal = make_calendar(session)
 
@@ -36,14 +36,14 @@ def test_post_events_allows_outside_daily_rhythm_hours(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.start_time == datetime(2026, 4, 20, 22, 0)
     assert event.end_time == datetime(2026, 4, 20, 23, 0)
 
 
-def test_post_events_allows_outside_daily_rhythm_extreme_hours(session):
+def test_post_events_allows_outside_daily_rhythm_extreme_hours(session, current_user):
     """Event create still succeeds outside Daily Rhythm hours."""
     cal = make_calendar(session)
 
@@ -54,7 +54,7 @@ def test_post_events_allows_outside_daily_rhythm_extreme_hours(session):
         end_time=datetime(2026, 4, 20, 7, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
     assert event.id is not None
 
 
@@ -63,7 +63,7 @@ def test_post_events_allows_outside_daily_rhythm_extreme_hours(session):
 # ---------------------------------------------------------------------------
 
 
-def test_patch_events_allows_move_outside_daily_rhythm_hours(session):
+def test_patch_events_allows_move_outside_daily_rhythm_hours(session, current_user):
     """Moving an event outside Daily Rhythm hours is allowed when no overlap."""
     cal = make_calendar(session)
     ev = make_event(
@@ -77,7 +77,7 @@ def test_patch_events_allows_move_outside_daily_rhythm_hours(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    updated = update_event(ev.id, body, session)
+    updated = update_event(ev.id, body, session, current_user)
     assert updated.start_time == datetime(2026, 4, 20, 22, 0)
     assert updated.end_time == datetime(2026, 4, 20, 23, 0)
 
@@ -87,7 +87,7 @@ def test_patch_events_allows_move_outside_daily_rhythm_hours(session):
 # ---------------------------------------------------------------------------
 
 
-def test_check_conflict_does_not_return_outside_availability(session):
+def test_check_conflict_does_not_return_outside_availability(session, current_user):
     """Outside-Daily-Rhythm placements produce no conflicts at the router."""
     cal = make_calendar(session)
 
@@ -97,7 +97,7 @@ def test_check_conflict_does_not_return_outside_availability(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    response = check_conflict(body, session)
+    response = check_conflict(body, session, current_user)
 
     assert response.has_conflicts is False
     assert response.conflicts == []
@@ -105,7 +105,7 @@ def test_check_conflict_does_not_return_outside_availability(session):
     assert "OUTSIDE_AVAILABILITY" not in codes
 
 
-def test_check_conflict_no_setup_returns_clean(session):
+def test_check_conflict_no_setup_returns_clean(session, current_user):
     """With no events at all, the placement is clean."""
     cal = make_calendar(session)
 
@@ -115,7 +115,7 @@ def test_check_conflict_no_setup_returns_clean(session):
         end_time=datetime(2026, 4, 23, 11, 0),
     )
 
-    response = check_conflict(body, session)
+    response = check_conflict(body, session, current_user)
     assert response.has_conflicts is False
     assert response.conflicts == []
 
@@ -136,7 +136,7 @@ def test_invalid_time_range_still_fails_at_schema():
         )
 
 
-def test_event_overlap_still_returns_409_on_create(session):
+def test_event_overlap_still_returns_409_on_create(session, current_user):
     """Creating an event that overlaps an existing one still returns 409."""
     cal = make_calendar(session)
     make_event(
@@ -153,13 +153,13 @@ def test_event_overlap_still_returns_409_on_create(session):
     )
 
     with pytest.raises(HTTPException) as exc:
-        create_event(body, session)
+        create_event(body, session, current_user)
     assert exc.value.status_code == 409
     codes = [c["reason_code"] for c in exc.value.detail["conflicts"]]
     assert "EVENT_OVERLAP" in codes
 
 
-def test_touching_event_boundary_is_allowed_on_create(session):
+def test_touching_event_boundary_is_allowed_on_create(session, current_user):
     """A new event whose start equals an existing event's end is allowed."""
     cal = make_calendar(session)
     make_event(
@@ -175,5 +175,5 @@ def test_touching_event_boundary_is_allowed_on_create(session):
         end_time=datetime(2026, 4, 20, 12, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
     assert event.id is not None

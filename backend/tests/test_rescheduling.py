@@ -23,6 +23,7 @@ def test_returns_none_for_missing_event(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=5,
         session=session,
+        user_id=1,
     )
     assert result is None
 
@@ -43,6 +44,7 @@ def test_ignores_self_during_overlap_check(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     starts = [o["start_time"] for o in result["options"]]
@@ -64,6 +66,7 @@ def test_preserves_event_duration(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=5,
         session=session,
+        user_id=1,
     )
 
     assert result["duration_minutes"] == 90
@@ -92,6 +95,7 @@ def test_avoids_other_events(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     # No option should overlap [13:00, 14:00).
@@ -125,6 +129,7 @@ def test_avoids_other_occupied_events(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -151,6 +156,7 @@ def test_options_stay_within_daily_rhythm_hours(session):
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -179,6 +185,7 @@ def test_same_day_options_rank_first(session):
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     # Find the index where the day flips from Monday to a later date.
@@ -222,6 +229,7 @@ def test_returns_empty_when_no_valid_replacement(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     # Only the original slot itself remains valid (since we exclude self) —
@@ -236,6 +244,7 @@ def test_returns_empty_when_no_valid_replacement(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
     assert result2["options"] == []
 
@@ -255,6 +264,7 @@ def test_options_include_explainability_fields(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert result["event_id"] == ev.id
@@ -289,5 +299,6 @@ def test_max_results_respected(session):
         search_end=datetime(2026, 4, 25, 0, 0),
         max_results=3,
         session=session,
+        user_id=1,
     )
     assert len(result["options"]) <= 3

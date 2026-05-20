@@ -1,4 +1,15 @@
-"""Seed script for MVP dev/demo data.
+"""Seed script for local dev/demo data only.
+
+This script exists so a developer can poke at the app without going through
+the signup flow. It is NOT what real users see — every new account created
+through POST /auth/signup gets its own default calendar in app/routers/auth.py.
+
+Behavior:
+  - Creates one demo user (if missing).
+  - Creates one default calendar ("Main calendar") owned by that user.
+  - Does NOT create Work/School/Personal calendars — that pattern implied
+    every real user got those preset calendars, which is no longer true.
+  - Does NOT create categories — those are user-created on demand.
 
 Run from backend/ directory: python seed.py
 Idempotent — safe to re-run.
@@ -23,11 +34,9 @@ DEMO_USER_EMAIL = "demo@example.com"
 # Local-dev demo credentials only. Never use this elsewhere.
 DEMO_USER_PASSWORD = "demo-password"
 
-SAMPLE_CALENDARS = [
-    {"name": "Work", "color": "#3B82F6"},
-    {"name": "Personal", "color": "#10B981"},
-    {"name": "School", "color": "#F59E0B"},
-]
+# The single demo calendar mirrors what real users get on signup — no
+# Work/School/Personal preset list.
+DEMO_CALENDAR_NAME = "Main calendar"
 
 
 def seed() -> None:
@@ -47,19 +56,21 @@ def seed() -> None:
             session.refresh(user)
             print(f"Created user: {user.name} (id={user.id})")
         else:
-            print(f"User already exists: {existing_user.name} (id={existing_user.id})")
+            user = existing_user
+            print(f"User already exists: {user.name} (id={user.id})")
 
-        # Seed calendars (idempotent by name)
-        for cal_data in SAMPLE_CALENDARS:
-            existing = session.exec(
-                select(Calendar).where(Calendar.name == cal_data["name"])
-            ).first()
-            if not existing:
-                calendar = Calendar(**cal_data)
-                session.add(calendar)
-                print(f"Created calendar: {cal_data['name']}")
-            else:
-                print(f"Calendar already exists: {cal_data['name']}")
+        # Seed exactly one demo calendar owned by the demo user.
+        existing = session.exec(
+            select(Calendar).where(
+                Calendar.user_id == user.id,
+                Calendar.name == DEMO_CALENDAR_NAME,
+            )
+        ).first()
+        if not existing:
+            session.add(Calendar(user_id=user.id, name=DEMO_CALENDAR_NAME))
+            print(f"Created calendar: {DEMO_CALENDAR_NAME}")
+        else:
+            print(f"Calendar already exists: {DEMO_CALENDAR_NAME}")
 
         session.commit()
         print("Seed complete.")

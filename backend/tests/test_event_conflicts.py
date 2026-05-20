@@ -27,6 +27,7 @@ def test_event_overlap_conflict_detected(session):
         start_time=datetime(2026, 4, 20, 10, 30),
         end_time=datetime(2026, 4, 20, 11, 30),
         session=session,
+        user_id=1,
     )
 
     codes = [c.reason_code for c in conflicts]
@@ -47,6 +48,7 @@ def test_event_fully_contained_overlap_detected(session):
         start_time=datetime(2026, 4, 20, 10, 30),
         end_time=datetime(2026, 4, 20, 11, 0),
         session=session,
+        user_id=1,
     )
 
     assert any(c.reason_code == "EVENT_OVERLAP" for c in conflicts)
@@ -66,6 +68,7 @@ def test_event_touching_boundary_is_not_overlap(session):
         start_time=datetime(2026, 4, 20, 11, 0),
         end_time=datetime(2026, 4, 20, 12, 0),
         session=session,
+        user_id=1,
     )
 
     assert not any(c.reason_code == "EVENT_OVERLAP" for c in conflicts)
@@ -84,6 +87,7 @@ def test_event_fully_separate_no_conflict(session):
         start_time=datetime(2026, 4, 20, 14, 0),
         end_time=datetime(2026, 4, 20, 15, 0),
         session=session,
+        user_id=1,
     )
 
     assert conflicts == []
@@ -103,6 +107,7 @@ def test_exclude_event_id_skips_self_overlap(session):
         start_time=datetime(2026, 4, 20, 10, 0),
         end_time=datetime(2026, 4, 20, 11, 0),
         session=session,
+        user_id=1,
         exclude_event_id=ev.id,
     )
 

@@ -1,16 +1,16 @@
 """Weekly Schedule Balance — deterministic per-day diagnostics.
 
-Given a target week, summarize per-day busy/free time and surface a few
-MVP signals: overloaded days, fragmented days, weak buffer capacity, and
-a per-day longest free window. No LLM is involved — all messages are
-formatted from named constants and computed facts.
+Given a target week and a user, summarize per-day busy/free time and
+surface a few MVP signals: overloaded days, fragmented days, weak buffer
+capacity, and a per-day longest free window. No LLM is involved — all
+messages are formatted from named constants and computed facts.
 
-Free capacity is bounded by Daily Rhythm suggestion hours (see
+Free capacity is bounded by the user's Daily Rhythm suggestion hours (see
 app.services.daily_rhythm) — legacy availability rows are not consulted.
-Free time is computed by subtracting existing events from the daily
-suggestion window. The endpoint URL and module names retain the
-historical "triage" label for compatibility, but user-facing wording uses
-Schedule Balance / Free Capacity / Daily Load language.
+Free time is computed by subtracting the user's own events from the daily
+suggestion window. The endpoint URL and module names retain the historical
+"triage" label for compatibility, but user-facing wording uses Schedule
+Balance / Free Capacity / Daily Load language.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -18,6 +18,7 @@ from typing import Dict, List, Tuple
 
 from sqlmodel import Session, select
 
+from app.models.calendar import Calendar
 from app.models.event import Event
 from app.services.conflict_detection import find_free_windows
 
@@ -52,6 +53,7 @@ def _clip_minutes(
 def compute_weekly_triage(
     session: Session,
     week_start: date,
+    user_id: int,
 ) -> Dict:
     """Return triage diagnostics for the 7-day window starting at week_start.
 
@@ -59,6 +61,7 @@ def compute_weekly_triage(
         session:     Active database session.
         week_start:  First day of the target week (caller decides whether to
                      snap to Monday — the route does that for the MVP).
+        user_id:     User whose events and rhythm bound the computation.
 
     Returns:
         Dict matching TriageResponse:
@@ -75,9 +78,12 @@ def compute_weekly_triage(
     )
     week_start_dt = datetime.combine(week_start, time.min)
 
-    # Pull all events that overlap the week, once.
+    # Pull all events on this user's calendars that overlap the week, once.
     events = session.exec(
-        select(Event).where(
+        select(Event)
+        .join(Calendar, Event.calendar_id == Calendar.id)
+        .where(
+            Calendar.user_id == user_id,
             Event.start_time < week_end_exclusive_dt,
             Event.end_time > week_start_dt,
         )
@@ -86,7 +92,9 @@ def compute_weekly_triage(
     event_intervals = [(e.start_time, e.end_time) for e in events]
 
     # Free windows for the whole week — single helper call, then bucket per day.
-    free_windows = find_free_windows(week_start, week_end_inclusive, session)
+    free_windows = find_free_windows(
+        week_start, week_end_inclusive, session, user_id=user_id
+    )
     free_by_day: Dict[date, List[Tuple[datetime, datetime]]] = {}
     for fw in free_windows:
         free_by_day.setdefault(fw.start_time.date(), []).append(

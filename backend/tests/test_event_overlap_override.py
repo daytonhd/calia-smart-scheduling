@@ -36,7 +36,7 @@ def _overlapping_create_body(
     )
 
 
-def test_create_overlap_rejected_by_default(session):
+def test_create_overlap_rejected_by_default(session, current_user):
     """POST /events rejects an overlapping event with 409 when allow_conflicts is omitted."""
     cal = make_calendar(session)
     make_event(
@@ -50,11 +50,11 @@ def test_create_overlap_rejected_by_default(session):
     body = _overlapping_create_body(cal.id)  # allow_conflicts defaults to False
 
     with pytest.raises(HTTPException) as exc_info:
-        create_event(body, session)
+        create_event(body, session, current_user)
     assert exc_info.value.status_code == 409
 
 
-def test_create_overlap_allowed_with_allow_conflicts(session):
+def test_create_overlap_allowed_with_allow_conflicts(session, current_user):
     """POST /events saves an overlapping event when allow_conflicts is True."""
     cal = make_calendar(session)
     existing = make_event(
@@ -66,7 +66,7 @@ def test_create_overlap_allowed_with_allow_conflicts(session):
     )
 
     body = _overlapping_create_body(cal.id, allow_conflicts=True)
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.id != existing.id
@@ -74,7 +74,7 @@ def test_create_overlap_allowed_with_allow_conflicts(session):
     assert event.end_time == datetime(2026, 4, 20, 11, 30)
 
 
-def test_patch_overlap_rejected_by_default(session):
+def test_patch_overlap_rejected_by_default(session, current_user):
     """PATCH /events rejects moving an event onto another with 409 by default."""
     cal = make_calendar(session)
     make_event(
@@ -98,11 +98,11 @@ def test_patch_overlap_rejected_by_default(session):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        update_event(moveable.id, body, session)
+        update_event(moveable.id, body, session, current_user)
     assert exc_info.value.status_code == 409
 
 
-def test_patch_overlap_allowed_with_allow_conflicts(session):
+def test_patch_overlap_allowed_with_allow_conflicts(session, current_user):
     """PATCH /events moves an event onto another when allow_conflicts is True."""
     cal = make_calendar(session)
     make_event(
@@ -126,7 +126,7 @@ def test_patch_overlap_allowed_with_allow_conflicts(session):
         allow_conflicts=True,
     )
 
-    event = update_event(moveable.id, body, session)
+    event = update_event(moveable.id, body, session, current_user)
 
     assert event.id == moveable.id
     assert event.start_time == datetime(2026, 4, 20, 14, 30)
@@ -147,7 +147,7 @@ def test_invalid_time_range_still_fails_with_allow_conflicts(session):
         )
 
 
-def test_allow_conflicts_is_not_persisted(session):
+def test_allow_conflicts_is_not_persisted(session, current_user):
     """allow_conflicts is request-only — never stored on the Event or in EventRead."""
     cal = make_calendar(session)
     make_event(
@@ -159,7 +159,7 @@ def test_allow_conflicts_is_not_persisted(session):
     )
 
     body = _overlapping_create_body(cal.id, allow_conflicts=True)
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     # Not an attribute on the saved ORM object...
     assert not hasattr(event, "allow_conflicts")

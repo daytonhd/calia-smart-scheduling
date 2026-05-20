@@ -27,7 +27,7 @@ from app.schemas.event import EventCreate, EventUpdate
 from .factories import make_calendar, make_event
 
 
-def test_create_event_outside_daily_rhythm_now_succeeds(session):
+def test_create_event_outside_daily_rhythm_now_succeeds(session, current_user):
     """Events outside Daily Rhythm hours are no longer rejected — a
     valid late-night create with no overlap should succeed."""
     cal = make_calendar(session)
@@ -39,14 +39,14 @@ def test_create_event_outside_daily_rhythm_now_succeeds(session):
         end_time=datetime(2026, 4, 20, 23, 0),
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.start_time == datetime(2026, 4, 20, 22, 0)
     assert event.end_time == datetime(2026, 4, 20, 23, 0)
 
 
-def test_create_event_overlap_returns_serializable_409(session):
+def test_create_event_overlap_returns_serializable_409(session, current_user):
     cal = make_calendar(session)
     existing = make_event(
         session,
@@ -64,7 +64,7 @@ def test_create_event_overlap_returns_serializable_409(session):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        create_event(body, session)
+        create_event(body, session, current_user)
 
     assert exc_info.value.status_code == 409
     rendered = json.dumps(exc_info.value.detail)
@@ -80,7 +80,7 @@ def test_create_event_overlap_returns_serializable_409(session):
     assert overlap["related_event_id"] == existing.id
 
 
-def test_update_event_into_conflict_returns_serializable_409(session):
+def test_update_event_into_conflict_returns_serializable_409(session, current_user):
     cal = make_calendar(session)
     blocker = make_event(
         session,
@@ -104,7 +104,7 @@ def test_update_event_into_conflict_returns_serializable_409(session):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        update_event(moveable.id, body, session)
+        update_event(moveable.id, body, session, current_user)
 
     assert exc_info.value.status_code == 409
     rendered = json.dumps(exc_info.value.detail)

@@ -22,7 +22,7 @@ START = datetime(2026, 4, 20, 10, 0)
 END = datetime(2026, 4, 20, 11, 0)
 
 
-def test_create_event_succeeds_with_category_omitted(session):
+def test_create_event_succeeds_with_category_omitted(session, current_user):
     """Omitting category entirely is allowed — the event is created with category None."""
     cal = make_calendar(session)
 
@@ -33,13 +33,13 @@ def test_create_event_succeeds_with_category_omitted(session):
         end_time=END,
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.category is None
 
 
-def test_create_event_succeeds_with_category_null(session):
+def test_create_event_succeeds_with_category_null(session, current_user):
     """An explicit null category (as FastAPI parses from a JSON body) is allowed."""
     cal = make_calendar(session)
 
@@ -53,13 +53,13 @@ def test_create_event_succeeds_with_category_null(session):
         "end_time": END.isoformat(),
     })
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.category is None
 
 
-def test_create_event_still_stores_provided_category(session):
+def test_create_event_still_stores_provided_category(session, current_user):
     """When a category is provided, it is stored unchanged (existing behavior)."""
     cal = make_calendar(session)
 
@@ -71,7 +71,7 @@ def test_create_event_still_stores_provided_category(session):
         end_time=END,
     )
 
-    event = create_event(body, session)
+    event = create_event(body, session, current_user)
 
     assert event.id is not None
     assert event.category == "Study"

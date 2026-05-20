@@ -36,6 +36,7 @@ def test_returns_ranked_options_for_proposed_event(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=5,
         session=session,
+        user_id=1,
     )
 
     assert result["event_title"] == "Study block"
@@ -64,6 +65,7 @@ def test_proposed_duration_is_preserved_in_every_option(session):
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     assert result["duration_minutes"] == 90
@@ -89,6 +91,7 @@ def test_excludes_existing_events_from_proposed_suggestions(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     # No option should overlap [13:00, 14:00) — there's no event_id to
@@ -117,6 +120,7 @@ def test_excludes_other_occupied_events_from_proposed_suggestions(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -139,6 +143,7 @@ def test_proposed_suggestions_stay_inside_daily_rhythm(session):
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=20,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -161,6 +166,7 @@ def test_max_results_respected_for_proposed(session):
         search_end=datetime(2026, 4, 25, 0, 0),
         max_results=3,
         session=session,
+        user_id=1,
     )
 
     assert len(result["options"]) <= 3
@@ -175,6 +181,7 @@ def test_proposed_same_day_options_rank_first(session):
         search_end=datetime(2026, 4, 22, 0, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     later_seen = False
@@ -195,6 +202,7 @@ def test_proposed_minutes_from_original_start_is_signed(session):
         search_end=datetime(2026, 4, 20, 17, 0),
         max_results=10,
         session=session,
+        user_id=1,
     )
 
     for o in result["options"]:
@@ -253,7 +261,7 @@ def test_schema_rejects_max_results_below_one():
 # ---------------------------------------------------------------------------
 
 
-def test_route_returns_404_for_unknown_calendar(session):
+def test_route_returns_404_for_unknown_calendar(session, current_user):
     body = ProposedRescheduleOptionsRequest(
         calendar_id=9999,
         title="X",
@@ -265,13 +273,13 @@ def test_route_returns_404_for_unknown_calendar(session):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        proposed_reschedule_options(body, session)
+        proposed_reschedule_options(body, session, current_user)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Calendar not found"
 
 
-def test_route_returns_options_for_valid_calendar(session):
+def test_route_returns_options_for_valid_calendar(session, current_user):
     cal = make_calendar(session)
 
     body = ProposedRescheduleOptionsRequest(
@@ -284,7 +292,7 @@ def test_route_returns_options_for_valid_calendar(session):
         max_results=5,
     )
 
-    result = proposed_reschedule_options(body, session)
+    result = proposed_reschedule_options(body, session, current_user)
     assert result["event_title"] == "Study block"
     assert result["duration_minutes"] == 90
     assert "event_id" not in result  # proposed events have no id

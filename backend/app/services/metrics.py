@@ -4,6 +4,9 @@ Metrics are computed by clipping each event interval to the target week
 [week_start 00:00, week_end 00:00) and summing minutes per day. Anything
 outside the week is ignored. The busiest day is the calendar day within the
 week with the most scheduled event minutes (ties resolved by earliest date).
+
+Every metric is scoped to a single user — only events on calendars owned by
+the supplied user_id are counted.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -11,6 +14,7 @@ from typing import List, Optional, Tuple
 
 from sqlmodel import Session, select
 
+from app.models.calendar import Calendar
 from app.models.event import Event
 
 
@@ -55,12 +59,14 @@ def _clip_minutes_per_day(
 
 def compute_weekly_metrics(
     session: Session,
+    user_id: int,
     week_start: Optional[date] = None,
 ) -> dict:
-    """Compute weekly scheduling metrics.
+    """Compute weekly scheduling metrics for the given user.
 
     Args:
         session:     Active database session.
+        user_id:     User whose events are counted (other users are ignored).
         week_start:  Any date inside the target week; snapped to that week's
                      Monday. Defaults to the current week.
 
@@ -78,7 +84,10 @@ def compute_weekly_metrics(
     week_end_dt = datetime.combine(we_exclusive, time.min)
 
     events = session.exec(
-        select(Event).where(
+        select(Event)
+        .join(Calendar, Event.calendar_id == Calendar.id)
+        .where(
+            Calendar.user_id == user_id,
             Event.start_time < week_end_dt,
             Event.end_time > week_start_dt,
         )

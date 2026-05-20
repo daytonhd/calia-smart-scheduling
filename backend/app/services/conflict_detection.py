@@ -3,6 +3,10 @@
 Active conflict types:
   1. EVENT_OVERLAP — proposed time overlaps an existing event
 
+Every query in this module is scoped to a single user: event overlap is
+computed against the user's own events, and slot/free-window scans only see
+the user's calendars. Cross-user event collisions are never reported.
+
 Event categories are descriptive only. Category values do not control
 scheduling availability, conflict behavior, slot suggestions, or
 replacement options. For the MVP, every saved Event is treated as occupied
@@ -24,11 +28,12 @@ Free-window scans and slot suggestions are driven by Daily Rhythm
 suggestion hours (see app.services.daily_rhythm).
 """
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, date, timedelta
 from typing import List, NamedTuple, Optional, Tuple
 
 from sqlmodel import Session, select
 
+from app.models.calendar import Calendar
 from app.models.event import Event
 from app.schemas.schedule import ConflictDetail, SlotSuggestion
 from app.services.daily_rhythm import get_suggestion_windows_for_range
@@ -41,14 +46,6 @@ class FreeWindow(NamedTuple):
     start_time: datetime
     end_time: datetime
 
-# Single-user MVP user id.
-MVP_USER_ID = 1
-
-# Weekday names for human-readable messages.
-_WEEKDAY_NAMES = [
-    "Monday", "Tuesday", "Wednesday", "Thursday",
-    "Friday", "Saturday", "Sunday",
-]
 
 # Slot suggestion explanation strings — kept here so the service is the single
 # source of truth for deterministic backend-formatted text.
@@ -64,18 +61,29 @@ def _format_clock(dt: datetime) -> str:
     return dt.strftime("%I:%M %p").lstrip("0")
 
 
+def _user_event_query(user_id: int):
+    """Base select(Event) restricted to events on the user's calendars."""
+    return (
+        select(Event)
+        .join(Calendar, Event.calendar_id == Calendar.id)
+        .where(Calendar.user_id == user_id)
+    )
+
+
 def _check_event_overlap(
     start_time: datetime,
     end_time: datetime,
     session: Session,
+    user_id: int,
     exclude_event_id: Optional[int],
 ) -> List[ConflictDetail]:
     """Return one ConflictDetail per existing event that overlaps the proposed interval.
 
-    Overlap condition (touching boundaries excluded):
+    Restricted to events on calendars owned by user_id. Overlap condition
+    (touching boundaries excluded):
         existing.start_time < end_time AND existing.end_time > start_time
     """
-    query = select(Event).where(
+    query = _user_event_query(user_id).where(
         Event.start_time < end_time,
         Event.end_time > start_time,
     )
@@ -99,16 +107,19 @@ def _check_event_overlap(
         ))
     return details
 
+
 def check_all_conflicts(
     start_time: datetime,
     end_time: datetime,
     session: Session,
+    user_id: int,
     exclude_event_id: Optional[int] = None,
 ) -> List[ConflictDetail]:
     """Return every detected conflict for a proposed event placement.
 
     Active checks:
-      1. EVENT_OVERLAP — proposed time overlaps an existing event
+      1. EVENT_OVERLAP — proposed time overlaps an existing event on the
+         user's own calendars
 
     Legacy availability-window checks have been removed. Manual events
     outside Daily Rhythm hours are allowed as long as they have a valid
@@ -118,13 +129,16 @@ def check_all_conflicts(
         start_time:        Proposed event start (naive datetime).
         end_time:          Proposed event end (naive datetime).
         session:           Active database session.
+        user_id:           User whose events form the conflict universe.
         exclude_event_id:  Event id to skip during overlap check (used on
                            update so the event does not conflict with itself).
 
     Returns:
         List of ConflictDetail — empty means no conflicts.
     """
-    return _check_event_overlap(start_time, end_time, session, exclude_event_id)
+    return _check_event_overlap(
+        start_time, end_time, session, user_id, exclude_event_id
+    )
 
 
 def _subtract_intervals(
@@ -168,13 +182,14 @@ def find_free_windows(
     start_date: date,
     end_date: date,
     session: Session,
+    user_id: int,
 ) -> List[FreeWindow]:
-    """Return maximal free intervals across [start_date, end_date].
+    """Return maximal free intervals across [start_date, end_date] for one user.
 
-    Driven by Daily Rhythm suggestion hours. For each day in the range,
-    the service builds the daily suggestion window, collects overlapping
-    events, subtracts occupied intervals, and returns the remaining free
-    intervals.
+    Driven by the user's Daily Rhythm suggestion hours. For each day in the
+    range, the service builds the daily suggestion window, collects the
+    user's overlapping events, subtracts occupied intervals, and returns the
+    remaining free intervals. Other users' events are ignored.
 
     This is a reusable lower-level helper — slot-fitting and triage logic
     layer on top by walking the returned windows. It does not enforce any
@@ -187,10 +202,10 @@ def find_free_windows(
     results: List[FreeWindow] = []
 
     for w_start, w_end in get_suggestion_windows_for_range(
-        start_date, end_date, session=session
+        start_date, end_date, session=session, user_id=user_id
     ):
         events = session.exec(
-            select(Event).where(
+            _user_event_query(user_id).where(
                 Event.start_time < w_end,
                 Event.end_time > w_start,
             )
@@ -212,14 +227,15 @@ def find_available_slots(
     end_date: date,
     max_results: int,
     session: Session,
+    user_id: int,
     exclude_event_id: Optional[int] = None,
 ) -> List[SlotSuggestion]:
     """Return up to max_results conflict-free slots of the requested duration.
-    
+
     Scans each day's Daily Rhythm suggestion window in 30-minute increments.
     The Daily Rhythm window is the single source of truth for which hours we
-    suggest in. A candidate slot is valid when it does not overlap any
-    existing event.
+    suggest in. A candidate slot is valid when it does not overlap any of the
+    user's own existing events.
 
     Each returned slot includes a deterministic reason_code (EARLIEST_VALID_SLOT)
     and an explanation string. Ranking is simple: earliest valid slots first.
@@ -231,6 +247,7 @@ def find_available_slots(
         end_date:          Last day to scan (inclusive).
         max_results:       Maximum number of slots to return.
         session:           Active database session.
+        user_id:           User whose events and rhythm bound the scan.
         exclude_event_id:  Event id to skip during overlap check (used by
                            rescheduling so the target event does not block
                            its own time).
@@ -243,7 +260,7 @@ def find_available_slots(
     results: List[SlotSuggestion] = []
 
     for window_start, window_end in get_suggestion_windows_for_range(
-        start_date, end_date, session=session
+        start_date, end_date, session=session, user_id=user_id
     ):
         if len(results) >= max_results:
             break
@@ -256,6 +273,7 @@ def find_available_slots(
                 candidate_start,
                 candidate_end,
                 session,
+                user_id,
                 exclude_event_id,
             ):
                 results.append(SlotSuggestion(
