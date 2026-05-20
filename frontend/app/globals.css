@@ -1267,6 +1267,20 @@ button:disabled {
     0 0 0 1px rgba(15, 23, 42, 0.04);
 }
 
+/* Compact confirmation dialog (Log out, etc.). Sized to fit the short
+   body text without forcing the larger panel dimensions. */
+.modal-card.modal-confirm {
+  width: min(420px, calc(100vw - 32px));
+  max-height: none;
+}
+
+.modal-confirm-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
 /* Absolute placement when the Add/Edit panel is floating on desktop.
    Inline top/left from React state drive the actual position. */
 @media (min-width: 720px) {
@@ -1903,6 +1917,20 @@ button:disabled {
   cursor: pointer;
   color: var(--fg);
   font: inherit;
+}
+
+/* Compact layout for very short events (15–30 min). Tighter vertical
+   padding and a centered single line keep the title readable inside
+   the minimum-height card without distorting longer events. */
+.cal-event-body.is-compact {
+  gap: 0;
+  padding: 0.2rem 0.55rem;
+  justify-content: center;
+}
+
+.cal-event-body.is-compact .cal-event-title {
+  font-size: 0.78rem;
+  line-height: 1.15;
 }
 
 .cal-event-body:hover:not(:disabled) {

@@ -233,6 +233,10 @@ const VISIBLE_END_HOUR = 22; // 10 PM (exclusive bottom)
 const VISIBLE_HOURS = VISIBLE_END_HOUR - VISIBLE_START_HOUR;
 const HOUR_HEIGHT = 56; // px per hour
 const GRID_HEIGHT = VISIBLE_HOURS * HOUR_HEIGHT;
+// Minimum pixel height for an event card. Short events (15 min ≈ 14px from
+// duration alone) would otherwise collapse to an unreadable sliver — this
+// floor keeps the title legible without distorting longer events.
+const MIN_EVENT_CARD_HEIGHT = 48;
 const HOUR_LABELS = Array.from(
   { length: VISIBLE_HOURS + 1 },
   (_, i) => VISIBLE_START_HOUR + i
@@ -263,7 +267,7 @@ function placeOnGrid(
   if (visibleEnd <= visibleStart) return null;
   const top = (visibleStart - VISIBLE_START_HOUR) * HOUR_HEIGHT;
   const height = Math.max(
-    18,
+    MIN_EVENT_CARD_HEIGHT,
     (visibleEnd - visibleStart) * HOUR_HEIGHT
   );
   return { top, height };
@@ -1230,7 +1234,7 @@ function ScheduleContent() {
                               }))
                             }
                           >
-                            <option value="">(none)</option>
+                            <option value="">No category</option>
                             {/* Preserve a legacy/free-form value not in the
                                 user's category list so editing an old event
                                 round-trips cleanly. */}
@@ -1710,7 +1714,9 @@ function ScheduleContent() {
                         >
                           <button
                             type="button"
-                            className="cal-event-body"
+                            className={`cal-event-body${
+                              place.height < 60 ? " is-compact" : ""
+                            }`}
                             onClick={() => openDetails(ev)}
                             title={`${ev.title} — ${formatTimeRange(
                               ev.start_time,
@@ -1718,12 +1724,12 @@ function ScheduleContent() {
                             )}`}
                           >
                             <div className="cal-event-title">{ev.title}</div>
-                            {place.height >= 40 && (
+                            {place.height >= 60 && (
                               <div className="cal-event-time">
                                 {formatTimeRange(ev.start_time, ev.end_time)}
                               </div>
                             )}
-                            {place.height >= 78 && (cal || ev.location) && (
+                            {place.height >= 90 && (cal || ev.location) && (
                               <div className="cal-event-meta">
                                 {cal ? cal.name : `cal #${ev.calendar_id}`}
                                 {ev.location ? ` · ${ev.location}` : ""}
