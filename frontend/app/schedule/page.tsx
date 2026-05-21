@@ -280,13 +280,14 @@ function overlapsDay(startIso: string, endIso: string, dayKey: string): boolean 
     new Date(endIso).getTime() > dayStart;
 }
 
-// Restrained event color palette keyed off calendar id.
+// Restrained event color palette keyed off calendar id. Calm Atoms tints —
+// soft fills with a muted colored left accent.
 const EVENT_PALETTE = [
-  { bar: "#5d80c4", bg: "#eef3fb", border: "#cfdcef" }, // blue
-  { bar: "#7c9b6f", bg: "#eef4ea", border: "#d4e1cb" }, // green
-  { bar: "#a07ab8", bg: "#f3edf9", border: "#ddcfea" }, // purple
-  { bar: "#c98d54", bg: "#fbf1e6", border: "#eed5b8" }, // amber
-  { bar: "#c46868", bg: "#fbeded", border: "#eecaca" }, // red
+  { bar: "#8a9baa", bg: "#eef1f4", border: "#dde3e8" }, // blue-gray
+  { bar: "#cfc9d6", bg: "#f3f1f6", border: "#e3dfea" }, // lavender
+  { bar: "#c9b79c", bg: "#f6f1e9", border: "#e8ddcb" }, // warm tan
+  { bar: "#d4c4c0", bg: "#f6efed", border: "#e8d8d3" }, // blush
+  { bar: "#a7b3a0", bg: "#eef2ec", border: "#dce3d8" }, // sage
 ];
 
 function colorForCalendar(calendarId: number): typeof EVENT_PALETTE[number] {
@@ -1300,7 +1301,7 @@ function ScheduleContent() {
                   </div>
 
                   {formConflicts.length > 0 && (
-                    <div className="modal-info danger" role="alert">
+                    <div className="modal-info conflict" role="alert">
                       <span className="modal-info-icon" aria-hidden>
                         !
                       </span>

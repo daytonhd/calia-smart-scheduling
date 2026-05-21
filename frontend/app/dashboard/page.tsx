@@ -119,13 +119,13 @@ interface BalanceStatus {
 // Restrained palette aligned with the rest of the Calia visual style.
 // Order is stable so re-renders don't reshuffle colors.
 const CATEGORY_COLORS = [
-  "#6592df", // accent blue
-  "#7c9b6f", // soft green
-  "#c98d54", // warm amber
-  "#a07ab8", // muted purple
-  "#5d80c4", // deeper blue
-  "#c46868", // restrained red
-  "#9aa3b2", // neutral slate
+  "#8a9baa", // accent blue-gray
+  "#b8c5cf", // soft accent
+  "#cfc9d6", // warm lavender
+  "#d9d4cb", // warm sand
+  "#d4c4c0", // warm blush
+  "#a7b3a0", // muted sage
+  "#c9b79c", // warm tan
 ];
 
 const UNCATEGORIZED_LABEL = "Uncategorized";

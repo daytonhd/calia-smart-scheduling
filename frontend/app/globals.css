@@ -1,24 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;450;500;600&display=swap');
+
 :root {
-  --bg: #faf9f7;
-  --fg: #0f172a;
-  --fg-soft: #334155;
-  --muted: #64748b;
-  --border: #e5e2dc;
-  --border-strong: #d6d2cb;
+  /* Calia editorial palette (Atoms). Existing token NAMES are preserved so
+     the whole stylesheet inherits the new look; only the values changed. */
+
+  /* Warm paper neutrals */
+  --bg: #f5f4f0;            /* warm off-white paper canvas */
+  --fg: #2c2e2b;            /* primary ink */
+  --fg-soft: #5a5c58;       /* secondary text */
+  --muted: #8a8c88;         /* tertiary / captions */
+  --border: #e8e6e1;        /* default hairline */
+  --border-strong: #d9d4cb; /* deeper border (warm sand) */
   --card-bg: #ffffff;
-  --accent: #6592df;
-  --accent-strong: #4f7bcf;
-  --accent-soft: #eef3fb;
-  --accent-softer: #f6f9fd;
-  --danger-fg: #b9352d;
-  --danger-bg: #fdecec;
-  --danger-border: #f5cfcb;
-  --warn-soft: #fff5e6;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --radius-card: 12px;
-  --radius-control: 8px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+
+  /* Cool muted blue-gray accent */
+  --accent: #8a9baa;        /* muted blue-gray */
+  --accent-strong: #6b7d8d; /* deep accent — primary buttons, links */
+  --accent-soft: #e8edf1;   /* accent wash — soft fills */
+  --accent-softer: #f8f7f4; /* panel / low-noise input surface */
+
+  /* Warm, calm error (not a harsh red) */
+  --danger-fg: #a8554a;
+  --danger-bg: #f7efe9;
+  --danger-border: #e7d4c9;
+  --warn-soft: #ede9e0;     /* warm cream (conflict surfaces) */
+
+  --shadow-card: 0 1px 2px rgba(44, 46, 43, 0.03), 0 1px 4px rgba(44, 46, 43, 0.04);
+  --radius-card: 14px;
+  --radius-control: 6px;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: 'Cormorant Garamond', "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+
+  /* ---- Additive Atoms tokens (full palette for component refinements) ---- */
+  --bg-panel: #f8f7f4;
+  --text-tertiary: #8a8c88;
+  --text-muted: #a8aaa6;
+  --border-light: #f0eeea;
+  --border-accent: #d4dee5;
+  --accent-deep: #6b7d8d;
+  --accent-wash: #e8edf1;
+  --warm-cream: #ede9e0;
+  --warm-sand: #d9d4cb;
+  --warm-blush: #d4c4c0;
+  --warm-lavender: #cfc9d6;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --shadow-xs: 0 1px 2px rgba(44, 46, 43, 0.03);
+  --shadow-sm: 0 1px 4px rgba(44, 46, 43, 0.04);
+  --shadow-md: 0 2px 8px rgba(44, 46, 43, 0.05);
+  --shadow-lg: 0 4px 20px rgba(44, 46, 43, 0.06);
+  --shadow-xl: 0 8px 40px rgba(44, 46, 43, 0.08);
 }
 
 * {
@@ -31,8 +65,10 @@ body {
   padding: 0;
   font-family: var(--font-sans);
   color: var(--fg);
-  line-height: 1.5;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Paint the warm off-white on the canvas (html). Body stays transparent
@@ -46,21 +82,33 @@ body {
   background: transparent;
 }
 
-/* Subtle paper-grain overlay. Inline SVG feTurbulence — no external
-   asset. Pointer-events disabled so it never blocks interaction.
-   z-index: -1 keeps it behind every interactive surface; the sticky
-   header (z:10) and modal overlay (z:50) both create stacking
-   contexts well above this layer. */
+/* Subtle paper grain — inline SVG feTurbulence, no external asset.
+   Kept very faint so it reads as paper, not noise. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.03;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
   background-size: 240px 240px;
   background-repeat: repeat;
+}
+
+/* Notebook/grid texture overlay (Atoms). Faint warm gridlines on 32px
+   pitch, behind all interactive surfaces. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(217, 212, 203, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(217, 212, 203, 0.18) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 a {
@@ -79,7 +127,7 @@ a:hover {
   z-index: 10;
   background: #ffffff;
   border-bottom: 1px solid var(--border);
-  padding: 0.85rem 1.75rem;
+  padding: 1rem 2rem;
   display: flex;
   align-items: center;
   gap: 2.25rem;
@@ -87,16 +135,33 @@ a:hover {
 
 .app-brand {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: var(--font-serif);
-  color: var(--accent);
-  font-size: 1.55rem;
+  color: var(--fg);
+  font-size: 1.6rem;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
+}
+
+/* Refined circular logo mark (Atoms) — pure CSS, ring + offset dot. */
+.app-brand::after {
+  content: "";
+  width: 17px;
+  height: 17px;
+  border: 1.2px solid var(--accent);
+  border-radius: 50%;
+  background-image: radial-gradient(
+    circle at 68% 34%,
+    var(--accent) 0 1.6px,
+    transparent 1.7px
+  );
 }
 
 .app-nav {
   display: flex;
-  gap: 0.25rem;
+  gap: 1.85rem;
   align-items: center;
 }
 
@@ -104,33 +169,22 @@ a:hover {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 0.5rem 0.85rem;
-  color: var(--fg-soft);
-  font-size: 0.95rem;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: color 120ms ease, background-color 120ms ease;
+  padding: 0.35rem 0.1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 400;
+  border-bottom: 1.5px solid transparent;
+  transition: color 120ms ease, border-color 120ms ease;
 }
 
 .app-nav a:hover {
-  color: var(--fg);
-  background: var(--accent-softer);
+  color: var(--fg-soft);
 }
 
 .app-nav a.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.app-nav a.active::after {
-  content: "";
-  position: absolute;
-  left: 0.85rem;
-  right: 0.85rem;
-  bottom: -0.65rem;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 2px 2px 0 0;
+  color: var(--fg);
+  font-weight: 450;
+  border-bottom-color: var(--accent);
 }
 
 .site-main {
@@ -240,13 +294,13 @@ a:hover {
   width: 48px;
   height: 48px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--accent-wash);
+  color: var(--accent-deep);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.3rem;
-  box-shadow: inset 0 0 0 1px #e2ecf8;
+  box-shadow: inset 0 0 0 1px rgba(138, 155, 170, 0.22);
 }
 
 .overview-content {
@@ -524,13 +578,18 @@ input[type="datetime-local"],
 select,
 textarea {
   font: inherit;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border-strong);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: #fff;
+  background: var(--accent-softer);
   color: var(--fg);
   outline: none;
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
 }
 
 input:focus,
@@ -543,30 +602,30 @@ textarea:focus {
 button {
   font: inherit;
   padding: 0.5rem 0.95rem;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: #fff;
   color: var(--fg);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 450;
   transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--fg-soft);
+  border-color: var(--border-accent);
 }
 
 button[type="submit"],
 button.primary {
-  background: var(--accent);
+  background: var(--accent-deep);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--accent-deep);
 }
 
 button[type="submit"]:hover:not(:disabled),
 button.primary:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: #5c6e7d;
+  border-color: #5c6e7d;
 }
 
 button.ghost {
@@ -773,19 +832,19 @@ button:disabled {
 
 .cta-link {
   display: inline-block;
-  background: var(--accent);
+  background: var(--accent-deep);
   color: #fff;
   padding: 0.45rem 0.9rem;
   border-radius: var(--radius-control);
   text-decoration: none;
   font-size: 0.88rem;
   font-weight: 500;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-deep);
 }
 
 .cta-link:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: #5c6e7d;
+  border-color: #5c6e7d;
   color: #fff;
 }
 
@@ -795,8 +854,8 @@ button:disabled {
   align-items: center;
   gap: 0.35rem;
   background: var(--accent-soft);
-  color: var(--accent-strong);
-  border: 1px solid #dde7f6;
+  color: var(--accent-deep);
+  border: 1px solid var(--border-accent);
   padding: 0.18rem 0.6rem;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -1075,6 +1134,59 @@ button:disabled {
   gap: 0.5rem;
 }
 
+/* ---------- Settings page (Atoms editorial headings + panel rows) ---------- */
+.settings-page > h2 {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-serif);
+  font-size: 1.95rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+.settings-page > h2 + .muted {
+  margin: 0 0 1.75rem;
+  font-size: 0.95rem;
+}
+
+.settings-page > h3 {
+  margin: 2.5rem 0 0.25rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.settings-page h4 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Calendar / category rows read as soft Atoms panel items. Higher
+   specificity than the base .event-list li so the panel styling wins. */
+.settings-page .event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.settings-page .event-list li {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-control);
+  background: var(--accent-softer);
+}
+
+.settings-page .event-list li:last-child {
+  border: 1px solid var(--border-light);
+}
+
 /* Success counterpart to .error-box — same shape, accent palette. */
 .success-box {
   background: var(--accent-soft);
@@ -1215,9 +1327,9 @@ button:disabled {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.32);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(44, 46, 43, 0.25);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   overflow: hidden;
   animation: modal-fade-in 140ms ease-out;
 }
@@ -1226,7 +1338,7 @@ button:disabled {
    Event Details. The schedule stays visible behind the panel and the
    surface feels less like a full-screen interruption. */
 .modal-overlay.is-panel {
-  background: rgba(15, 23, 42, 0.14);
+  background: rgba(44, 46, 43, 0.14);
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
 }
@@ -1248,10 +1360,10 @@ button:disabled {
   flex-direction: column;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-xl);
   box-shadow:
-    0 20px 50px rgba(15, 23, 42, 0.18),
-    0 4px 12px rgba(15, 23, 42, 0.08);
+    0 12px 48px rgba(44, 46, 43, 0.12),
+    0 4px 12px rgba(44, 46, 43, 0.06);
   overflow: hidden;
   animation: modal-pop-in 160ms ease-out;
 }
@@ -1260,11 +1372,11 @@ button:disabled {
 .modal-card.modal-panel {
   width: min(520px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 80px));
-  border-radius: 12px;
+  border-radius: var(--r-xl);
   box-shadow:
-    0 18px 44px rgba(15, 23, 42, 0.20),
-    0 6px 14px rgba(15, 23, 42, 0.10),
-    0 0 0 1px rgba(15, 23, 42, 0.04);
+    0 16px 44px rgba(44, 46, 43, 0.14),
+    0 6px 16px rgba(44, 46, 43, 0.08),
+    0 0 0 1px rgba(44, 46, 43, 0.03);
 }
 
 /* Compact confirmation dialog (Log out, etc.). Sized to fit the short
@@ -1577,10 +1689,10 @@ button:disabled {
   align-items: flex-start;
   gap: 0.55rem;
   padding: 0.7rem 0.85rem;
-  background: var(--accent-softer);
-  border: 1px solid #e2ecf8;
-  border-radius: var(--radius-control);
-  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--r-md);
+  color: var(--accent-deep);
   font-size: 0.85rem;
 }
 
@@ -1600,6 +1712,22 @@ button:disabled {
   background: var(--danger-bg);
   border-color: var(--danger-border);
   color: var(--danger-fg);
+}
+
+/* Conflict (recoverable overlap) — calm warm-cream, not an alarming red.
+   Distinct from .danger, which stays reserved for genuine errors. */
+.modal-info.conflict {
+  background: rgba(237, 233, 224, 0.55);
+  border-color: var(--warm-cream);
+  color: var(--fg-soft);
+}
+
+.modal-info.conflict strong {
+  color: var(--fg);
+}
+
+.modal-info.conflict .modal-info-icon {
+  color: #a8754a;
 }
 
 @media (max-width: 520px) {
@@ -1632,7 +1760,7 @@ button:disabled {
 
 .replacement-option:hover {
   background: var(--accent-softer);
-  border-color: #dde7f6;
+  border-color: var(--border-accent);
 }
 
 .replacement-option-when {
@@ -1671,8 +1799,8 @@ button:disabled {
 
 .replacement-option button.secondary:hover:not(:disabled) {
   background: var(--accent-soft);
-  border-color: #b9cce8;
-  color: var(--accent-strong);
+  border-color: var(--border-accent);
+  color: var(--accent-deep);
 }
 
 /* ---------- Event Details modal ---------- */
@@ -1760,7 +1888,7 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--card-bg);
+  background: var(--accent-softer);
   border-bottom: 1px solid var(--cal-line-strong);
 }
 
@@ -1792,35 +1920,45 @@ button:disabled {
 
 .cal-day-header-text {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.45rem;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.85rem;
   letter-spacing: 0.01em;
 }
 
 .cal-day-weekday {
+  font-size: 0.68rem;
   font-weight: 600;
-  color: var(--fg-soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .cal-day-num {
   font-weight: 500;
-  color: var(--fg-soft);
+  color: var(--fg);
 }
 
-.cal-day-header.is-today .cal-day-weekday,
+/* Today: filled accent circle on the day number (Atoms). */
+.cal-day-header.is-today .cal-day-weekday {
+  color: var(--accent-deep);
+}
+
 .cal-day-header.is-today .cal-day-num {
-  color: var(--accent);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background: var(--accent-deep);
+  color: #fff;
+  font-weight: 500;
 }
 
+/* The standalone dot is replaced by the filled-circle treatment above. */
 .cal-today-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  position: absolute;
-  bottom: 4px;
+  display: none;
 }
 
 /* All-day strip */
@@ -1882,25 +2020,25 @@ button:disabled {
 }
 
 .cal-day-col.is-today {
-  background-color: #f1f6fd;
+  background-color: rgba(138, 155, 170, 0.07);
 }
 
 /* Event blocks: soft tinted card with strong colored left accent */
 .cal-event {
   position: absolute;
-  left: 5px;
-  right: 5px;
+  left: 4px;
+  right: 4px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: #fff;
   overflow: hidden;
-  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 1px rgba(44, 46, 43, 0.03);
   transition: box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .cal-event:hover {
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 6px rgba(44, 46, 43, 0.08);
 }
 
 .cal-event-body {
@@ -2056,21 +2194,21 @@ button:disabled {
 .capacity-track {
   position: relative;
   height: 0.4rem;
-  background: #eef2f8;
+  background: var(--border-light);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .capacity-fill {
   height: 100%;
-  background: #8aa9e0;
+  background: var(--accent);
   border-radius: 999px;
   transition: width 200ms ease;
 }
 
 /* Visual cue when a day's free capacity is tight (overloaded or weak buffer) */
 .capacity-fill.tight {
-  background: #e09a55;
+  background: #c08a5a;
 }
 
 .capacity-scale {
@@ -2149,13 +2287,13 @@ button:disabled {
 .load-bar {
   width: 65%;
   min-height: 2px;
-  background: #efd7bc;
+  background: var(--accent-soft);
   border-radius: 3px 3px 0 0;
   transition: height 200ms ease;
 }
 
 .load-bar.peak {
-  background: #e09a55;
+  background: var(--accent);
 }
 
 .load-xaxis {
@@ -2202,9 +2340,9 @@ button:disabled {
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    #6592df 0%,
-    #b9c4d3 50%,
-    #e09a55 100%
+    var(--accent-wash) 0%,
+    #c7cdd4 50%,
+    var(--warm-sand) 100%
   );
 }
 
@@ -2229,8 +2367,9 @@ button:disabled {
 
 .balance-interpretation-label {
   font-family: var(--font-serif);
-  font-size: 1.7rem;
-  font-weight: 500;
+  font-size: 1.9rem;
+  font-weight: 400;
+  font-style: italic;
   letter-spacing: -0.01em;
   line-height: 1.1;
   margin-bottom: 0.4rem;
@@ -2238,16 +2377,16 @@ button:disabled {
 }
 
 .balance-interpretation-label.light {
-  color: var(--accent-strong);
+  color: var(--accent-deep);
 }
 
 .balance-interpretation-label.balanced {
-  color: #2f6b3a;
+  color: var(--fg);
 }
 
 .balance-interpretation-label.slight-heavy,
 .balance-interpretation-label.heavy {
-  color: #b46a1f;
+  color: #a8754a;
 }
 
 .balance-interpretation-detail {
@@ -2339,11 +2478,11 @@ button:disabled {
 .rhythm-edit-btn {
   display: inline-block;
   margin-top: 0.85rem;
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   text-align: center;
-  border: 1px solid var(--accent);
-  color: var(--accent-strong);
-  background: var(--card-bg);
+  border: 1px solid var(--border-accent);
+  color: var(--accent-deep);
+  background: transparent;
   border-radius: var(--radius-control);
   font-size: 0.85rem;
   font-weight: 500;
@@ -2353,7 +2492,7 @@ button:disabled {
 }
 
 .rhythm-edit-btn:hover {
-  background: var(--accent-softer);
+  background: var(--accent-soft);
 }
 
 .rhythm-note {
@@ -2413,14 +2552,14 @@ button:disabled {
 }
 
 .app-nav-public a.app-nav-cta {
-  background: var(--accent);
+  background: var(--accent-deep);
   color: #fff;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-deep);
 }
 
 .app-nav-public a.app-nav-cta:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: #5c6e7d;
+  border-color: #5c6e7d;
   color: #fff;
 }
 
@@ -2462,10 +2601,11 @@ button:disabled {
 
 .landing-eyebrow {
   margin: 0;
-  font-family: var(--font-serif);
   color: var(--accent);
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .landing-title {
@@ -2509,14 +2649,14 @@ button:disabled {
 }
 
 .landing-cta-primary {
-  background: var(--accent);
+  background: var(--accent-deep);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--accent-deep);
 }
 
 .landing-cta-primary:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: #5c6e7d;
+  border-color: #5c6e7d;
   color: #fff;
 }
 
@@ -2658,13 +2798,13 @@ button:disabled {
 
 .preview-event-conflict {
   background: var(--warn-soft);
-  border-color: #f0d8b3;
-  border-left-color: #d99a3b;
+  border-color: #e6d8c4;
+  border-left-color: #c08a5a;
 }
 
 .preview-event-warn {
   font-size: 0.7rem;
-  color: #b46a1f;
+  color: #a8754a;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
