@@ -526,10 +526,10 @@ a:hover {
 }
 
 .row-title {
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 500;
   color: var(--fg);
-  line-height: 1.25;
+  line-height: 1.3;
   margin: 0 0 0.1rem 0;
   word-break: break-word;
 }
@@ -564,7 +564,7 @@ a:hover {
 }
 
 .metric-row .metric-value {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
 }
 
@@ -1256,16 +1256,6 @@ button:disabled {
   color: var(--accent-strong);
 }
 
-.range-display {
-  font-family: var(--font-serif);
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: var(--fg);
-  letter-spacing: -0.005em;
-  margin-left: 0.2rem;
-  white-space: nowrap;
-}
-
 .range-pickers {
   display: inline-flex;
   align-items: center;
@@ -1285,6 +1275,12 @@ button:disabled {
 
 .toolbar-select {
   padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* Keep the Add Event button the same height as the filter/date controls. */
+.toolbar-right button.primary {
+  padding: 0.4rem 0.85rem;
   font-size: 0.85rem;
 }
 
@@ -2433,11 +2429,6 @@ button:disabled {
   color: var(--fg);
 }
 
-.upcoming-next {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
 .upcoming-link {
   display: inline-block;
   margin-top: 0.85rem;
@@ -2465,12 +2456,20 @@ button:disabled {
 }
 
 .rhythm-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.78rem;
   color: var(--muted);
 }
 
+.rhythm-label-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
 .rhythm-value {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--fg);
 }

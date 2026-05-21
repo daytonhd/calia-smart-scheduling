@@ -84,25 +84,6 @@ function shiftDateInput(input: string, days: number): string {
   return toDateInput(dt);
 }
 
-function formatRangeLabel(startInput: string, endInput: string): string {
-  const [sy, sm, sd] = startInput.split("-").map(Number);
-  const [ey, em, ed] = endInput.split("-").map(Number);
-  const start = new Date(sy, (sm ?? 1) - 1, sd ?? 1);
-  const end = new Date(ey, (em ?? 1) - 1, ed ?? 1);
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const startFmt = start.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
-  const endFmt = end.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${startFmt} – ${endFmt}`;
-}
-
 function formatTimeShort(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -142,7 +123,7 @@ function formatShortDate(iso: string): string {
 }
 
 // Format a bare "YYYY-MM-DD" date (e.g. WeeklyMetrics.busiest_day) as
-// "Weekday, MM/DD/YY". Built from local date parts so the displayed
+// "Weekday, MM/DD". Built from local date parts so the displayed
 // weekday matches the calendar day regardless of timezone.
 function formatBusiestDay(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -152,7 +133,7 @@ function formatBusiestDay(iso: string): string {
   const d = Number(m[3]);
   const date = new Date(y, mo - 1, d);
   const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
-  return `${weekday}, ${pad(mo)}/${pad(d)}/${String(y).slice(-2)}`;
+  return `${weekday}, ${pad(mo)}/${pad(d)}`;
 }
 
 function formatHourLabel(h: number): string {
@@ -1020,10 +1001,6 @@ function ScheduleContent() {
             >
               ›
             </button>
-          </div>
-
-          <div className="range-display">
-            {formatRangeLabel(appliedStart, appliedEnd)}
           </div>
 
           <div className="range-pickers">

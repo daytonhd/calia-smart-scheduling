@@ -28,14 +28,6 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function formatDayTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -128,7 +120,7 @@ const CATEGORY_COLORS = [
   "#c9b79c", // warm tan
 ];
 
-const UNCATEGORIZED_LABEL = "Uncategorized";
+const UNCATEGORIZED_LABEL = "Other";
 
 interface CategorySlice {
   label: string;
@@ -137,7 +129,7 @@ interface CategorySlice {
 }
 
 // Convert a list of events into one slice per category. Events with no
-// category fall under "Uncategorized". Returns slices sorted descending by
+// category fall under "Other". Returns slices sorted descending by
 // minutes for a stable legend.
 function buildCategorySlices(events: Event[]): CategorySlice[] {
   const totals = new Map<string, number>();
@@ -442,7 +434,7 @@ function DashboardContent() {
                               By Category
                             </h4>
                             <p className="balance-subcard-sub">
-                              Scheduled time this week, grouped by label.
+                              Scheduled time this week, grouped by category.
                             </p>
                           </div>
                           <CategoryDoughnut
@@ -564,63 +556,48 @@ function DashboardContent() {
 
             {/* Right sidebar */}
             <aside className="page-side">
-              {/* Upcoming — carries today/next-event context */}
-              {(() => {
-                const now = Date.now();
-                const nextEvent =
-                  upcomingEvents.find(
-                    (e) => new Date(e.start_time).getTime() >= now
-                  ) ?? upcomingEvents[0];
-                return (
-                  <div className="sidebar-card upcoming-card">
-                    <div className="sidebar-card-title">
-                      <span>Upcoming</span>
-                    </div>
+              {/* Upcoming — carries today's context + the next-seven-days list */}
+              <div className="sidebar-card upcoming-card">
+                <div className="sidebar-card-title">
+                  <span>Upcoming</span>
+                </div>
 
-                    <div className="upcoming-context">
-                      <span className="upcoming-today">
-                        Today · {todayEvents.length} event
-                        {todayEvents.length === 1 ? "" : "s"}
-                      </span>
-                      {nextEvent && (
-                        <span className="upcoming-next">
-                          Next: {nextEvent.title} at{" "}
-                          {formatTime(nextEvent.start_time)}
-                        </span>
-                      )}
-                    </div>
+                <div className="upcoming-context">
+                  <span className="upcoming-today">
+                    Today · {todayEvents.length} event
+                    {todayEvents.length === 1 ? "" : "s"}
+                  </span>
+                </div>
 
-                    {upcomingEvents.length === 0 ? (
-                      <div className="empty-state empty-state-soft">
-                        <span className="empty-state-strong">
-                          Nothing on the horizon
-                        </span>
-                        The next seven days are clear.
-                      </div>
-                    ) : (
-                      <ul className="list-rows">
-                        {upcomingEvents.slice(0, 4).map((e) => (
-                          <li key={e.id}>
-                            <div className="row-icon" aria-hidden>
-                              ▣
-                            </div>
-                            <div className="row-body">
-                              <div className="row-title">{e.title}</div>
-                              <div className="row-meta">
-                                {formatDayTime(e.start_time)}
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <Link href="/schedule" className="upcoming-link">
-                      View full schedule →
-                    </Link>
+                {upcomingEvents.length === 0 ? (
+                  <div className="empty-state empty-state-soft">
+                    <span className="empty-state-strong">
+                      Nothing on the horizon
+                    </span>
+                    The next seven days are clear.
                   </div>
-                );
-              })()}
+                ) : (
+                  <ul className="list-rows">
+                    {upcomingEvents.slice(0, 4).map((e) => (
+                      <li key={e.id}>
+                        <div className="row-icon" aria-hidden>
+                          ▣
+                        </div>
+                        <div className="row-body">
+                          <div className="row-title">{e.title}</div>
+                          <div className="row-meta">
+                            {formatDayTime(e.start_time)}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <Link href="/schedule" className="upcoming-link">
+                  View full schedule →
+                </Link>
+              </div>
 
               {/* Daily Rhythm */}
               <div className="sidebar-card rhythm-card">
@@ -629,7 +606,23 @@ function DashboardContent() {
                 </div>
                 <div className="rhythm-rows">
                   <div className="rhythm-row">
-                    <span className="rhythm-label">Awake hours</span>
+                    <span className="rhythm-label">
+                      <svg
+                        className="rhythm-label-icon"
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        aria-hidden
+                      >
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 3v1.6M12 19.4V21M3 12h1.6M19.4 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M18.4 5.6l-1.1 1.1M6.7 17.3l-1.1 1.1" />
+                      </svg>
+                      Awake hours
+                    </span>
                     <span className="rhythm-value">7:00 AM – 11:00 PM</span>
                   </div>
                   <div className="rhythm-row">
@@ -663,12 +656,14 @@ interface CategoryDoughnutProps {
 }
 
 function CategoryDoughnut({ slices, totalMinutes }: CategoryDoughnutProps) {
-  // Layout constants.
+  // Layout constants. PAD keeps the ring's outer edge clear of the viewBox
+  // edge so the doughnut never touches the card edges at any zoom level.
   const SIZE = 168;
   const STROKE = 26;
+  const PAD = 12;
   const cx = SIZE / 2;
   const cy = SIZE / 2;
-  const r = SIZE / 2 - 4;
+  const r = SIZE / 2 - PAD;
   const rInner = r - STROKE;
 
   if (totalMinutes === 0 || slices.length === 0) {
@@ -693,16 +688,14 @@ function CategoryDoughnut({ slices, totalMinutes }: CategoryDoughnutProps) {
         aria-label="Scheduled time grouped by category"
       >
         {singleSlice ? (
-          <>
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill="none"
-              stroke={slices[0].color}
-              strokeWidth={STROKE}
-            />
-          </>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={(r + rInner) / 2}
+            fill="none"
+            stroke={slices[0].color}
+            strokeWidth={STROKE}
+          />
         ) : (
           slices.map((s) => {
             const startAngle = (acc / totalMinutes) * Math.PI * 2;
