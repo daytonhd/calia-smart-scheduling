@@ -9,14 +9,36 @@ import SiteNav from "./SiteNav";
 export default function AppHeader() {
   const { isLoading, isAuthenticated, user, logout } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
 
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   const openConfirm = useCallback(() => setConfirmOpen(true), []);
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
   const confirmLogout = useCallback(() => {
     setConfirmOpen(false);
     logout();
   }, [logout]);
+
+  // Close the account menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   // Close on Escape and focus the safer "Cancel" button when the dialog opens.
   useEffect(() => {
@@ -64,17 +86,49 @@ export default function AppHeader() {
           <span className="app-brand">Calia</span>
         </Link>
         <SiteNav />
-        <div className="app-user-control">
-          <span className="app-user-name" title={user?.email ?? undefined}>
-            {user?.name || user?.email}
-          </span>
+        <div className="app-account" ref={accountRef}>
           <button
             type="button"
-            className="ghost app-logout-btn"
-            onClick={openConfirm}
+            className="app-account-trigger"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            Log out
+            <span className="app-account-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9.25" />
+                <circle cx="12" cy="9.75" r="2.9" />
+                <path d="M6.6 18.4a5.6 5.6 0 0 1 10.8 0" />
+              </svg>
+            </span>
+            <span className="app-account-name" title={user?.email ?? undefined}>
+              {user?.name || user?.email}
+            </span>
           </button>
+
+          {menuOpen && (
+            <div className="app-account-menu" role="menu">
+              <Link
+                href="/settings"
+                role="menuitem"
+                className="app-account-menu-item"
+                onClick={closeMenu}
+              >
+                Settings
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                className="app-account-menu-item"
+                onClick={() => {
+                  closeMenu();
+                  openConfirm();
+                }}
+              >
+                Log out
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

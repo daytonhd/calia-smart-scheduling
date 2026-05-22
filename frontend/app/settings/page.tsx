@@ -37,7 +37,7 @@ interface CategoryFormState {
 const EMPTY_CALENDAR_FORM: CalendarFormState = { name: "", color: "" };
 const EMPTY_CATEGORY_FORM: CategoryFormState = { name: "", color: "" };
 
-// Daily Rhythm starting values — only shown until the backend responds.
+// Daily Rhythm starting values - only shown until the backend responds.
 const EMPTY_RHYTHM: DailyRhythm = {
   awake_start_time: "07:00",
   awake_end_time: "23:00",
@@ -46,7 +46,7 @@ const EMPTY_RHYTHM: DailyRhythm = {
 };
 
 // All times are "HH:MM" 24-hour strings from <input type="time">, which are
-// always zero-padded — so plain string comparison is chronological.
+// always zero-padded - so plain string comparison is chronological.
 function validateRhythm(r: DailyRhythm): string | null {
   const { awake_start_time, awake_end_time } = r;
   const { suggestions_start_time, suggestions_end_time } = r;
@@ -335,8 +335,7 @@ function SettingsContent() {
       {/* ---------- Calendars ---------- */}
       <h3>Calendars</h3>
       <p className="muted">
-        Calendars help you organize schedule items into separate streams — for
-        example, Work and Personal.
+        Group schedule items into separate streams, such as Work and Personal.
       </p>
 
       {calendarsError && (
@@ -408,8 +407,7 @@ function SettingsContent() {
         <div className="settings-empty">
           <strong className="settings-empty-title">No calendars yet</strong>
           <p className="settings-empty-body">
-            Calendars help you organize schedule items into separate streams.
-            Create your first calendar to start adding events.
+            You need at least one calendar before you can add events.
           </p>
           {!calendarFormVisible && (
             <button
@@ -440,7 +438,7 @@ function SettingsContent() {
                 <div>
                   <strong>{c.name}</strong>
                   {c.color && (
-                    <span className="muted"> — color {c.color}</span>
+                    <span className="muted">, color {c.color}</span>
                   )}
                   <div className="muted small">id #{c.id}</div>
                 </div>
@@ -461,8 +459,8 @@ function SettingsContent() {
       {/* ---------- Categories ---------- */}
       <h3 style={{ marginTop: "2.5rem" }}>Categories</h3>
       <p className="muted">
-        Categories are labels for schedule items — for example, Class, Gym,
-        Study, or Personal. They are descriptive only.
+        Categories help describe schedule items, such as Class, Gym, Study, or
+        Personal.
       </p>
 
       {categoriesError && (
@@ -534,9 +532,7 @@ function SettingsContent() {
         <div className="settings-empty">
           <strong className="settings-empty-title">No categories yet</strong>
           <p className="settings-empty-body">
-            Categories are labels you can attach to schedule items — like
-            Class, Gym, Study, or Personal. Add the ones that fit how you
-            think about your time.
+            Add the labels that fit how you think about your time.
           </p>
           {!categoryFormVisible && (
             <button
@@ -576,7 +572,7 @@ function SettingsContent() {
                     <strong>{c.name}</strong>
                   </span>
                   {c.color && (
-                    <span className="muted"> — color {c.color}</span>
+                    <span className="muted">, color {c.color}</span>
                   )}
                   <div className="muted small">id #{c.id}</div>
                 </div>
@@ -597,7 +593,7 @@ function SettingsContent() {
       {/* ---------- Daily Rhythm ---------- */}
       <h3 style={{ marginTop: "2.5rem" }}>Daily Rhythm</h3>
       <p className="muted">
-        Set the hours Calia uses to understand your day and suggest open times.
+        Set the hours Calia uses when suggesting open times.
       </p>
 
       {rhythmLoading ? (

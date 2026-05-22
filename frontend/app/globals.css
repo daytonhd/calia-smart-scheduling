@@ -15,8 +15,8 @@
 
   /* Cool muted blue-gray accent */
   --accent: #8a9baa;        /* muted blue-gray */
-  --accent-strong: #6b7d8d; /* deep accent — primary buttons, links */
-  --accent-soft: #e8edf1;   /* accent wash — soft fills */
+  --accent-strong: #6b7d8d; /* deep accent - primary buttons, links */
+  --accent-soft: #e8edf1;   /* accent wash - soft fills */
   --accent-softer: #f8f7f4; /* panel / low-noise input surface */
 
   /* Warm, calm error (not a harsh red) */
@@ -82,7 +82,7 @@ body {
   background: transparent;
 }
 
-/* Subtle paper grain — inline SVG feTurbulence, no external asset.
+/* Subtle paper grain - inline SVG feTurbulence, no external asset.
    Kept very faint so it reads as paper, not noise. */
 body::before {
   content: "";
@@ -145,7 +145,7 @@ a:hover {
   letter-spacing: -0.01em;
 }
 
-/* Refined circular logo mark (Atoms) — pure CSS, ring + offset dot. */
+/* Refined circular logo mark (Atoms) - pure CSS, ring + offset dot. */
 .app-brand::after {
   content: "";
   width: 17px;
@@ -346,7 +346,7 @@ a:hover {
 }
 
 /* Schedule page: give the calendar more breathing room. The sidebar
-   only joins the main column at wider desktop sizes — at narrower
+   only joins the main column at wider desktop sizes - at narrower
    widths it stacks below so the weekly grid never gets crushed. */
 .schedule-page-grid {
   grid-template-columns: 1fr;
@@ -468,7 +468,7 @@ a:hover {
   font-size: 0.92rem;
 }
 
-/* Softer variant — used inside sidebar cards where we don't want a second visible card outline. */
+/* Softer variant - used inside sidebar cards where we don't want a second visible card outline. */
 .empty-state.empty-state-soft {
   border: none;
   background: transparent;
@@ -932,7 +932,7 @@ button:disabled {
   gap: 0.5rem;
 }
 
-/* Settings empty state — used when calendars or categories list is empty.
+/* Settings empty state - used when calendars or categories list is empty.
    Quiet card with one inviting call-to-action. */
 .settings-empty {
   display: flex;
@@ -962,7 +962,7 @@ button:disabled {
   max-width: 56ch;
 }
 
-/* Schedule no-calendars empty state — sits above the calendar grid when
+/* Schedule no-calendars empty state - sits above the calendar grid when
    a user has not created any calendars yet. Calm, with one clear CTA
    into Settings. */
 .schedule-empty-card {
@@ -996,7 +996,7 @@ button:disabled {
   max-width: 56ch;
 }
 
-/* Inline category empty-state inside the Add/Edit Event modal — shown
+/* Inline category empty-state inside the Add/Edit Event modal - shown
    when the user has not created any categories yet. */
 .category-empty-hint {
   display: flex;
@@ -1104,7 +1104,7 @@ button:disabled {
   }
 }
 
-/* Category list row — small color swatch next to the name. */
+/* Category list row - small color swatch next to the name. */
 .category-row-name {
   display: inline-flex;
   align-items: center;
@@ -1120,7 +1120,7 @@ button:disabled {
   flex-shrink: 0;
 }
 
-/* Daily Rhythm form (Settings) — caption + paired time inputs. */
+/* Daily Rhythm form (Settings) - caption + paired time inputs. */
 .rhythm-field-label {
   display: block;
   font-size: 0.85rem;
@@ -1160,6 +1160,12 @@ button:disabled {
   color: var(--fg);
 }
 
+.settings-page > h3 + .muted {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  max-width: 60ch;
+}
+
 .settings-page h4 {
   font-size: 0.78rem;
   font-weight: 600;
@@ -1187,7 +1193,7 @@ button:disabled {
   border: 1px solid var(--border-light);
 }
 
-/* Success counterpart to .error-box — same shape, accent palette. */
+/* Success counterpart to .error-box - same shape, accent palette. */
 .success-box {
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -1200,7 +1206,7 @@ button:disabled {
 
 /* ---------- Schedule page wrapper ---------- */
 .schedule-page {
-  /* No oversized page header here — the nav already indicates the page.
+  /* No oversized page header here - the nav already indicates the page.
      A small top gap keeps the toolbar from hugging the nav bar. */
   padding-top: 0.25rem;
 }
@@ -1330,7 +1336,7 @@ button:disabled {
   animation: modal-fade-in 140ms ease-out;
 }
 
-/* Lighter "floating panel" overlay — used by Add/Edit Event and
+/* Lighter "floating panel" overlay - used by Add/Edit Event and
    Event Details. The schedule stays visible behind the panel and the
    surface feels less like a full-screen interruption. */
 .modal-overlay.is-panel {
@@ -1398,7 +1404,7 @@ button:disabled {
 }
 
 /* Drag affordance for the floating Add/Edit panel. The full top header
-   strip is the move target — interactive controls inside (close button,
+   strip is the move target - interactive controls inside (close button,
    etc.) are filtered out in JS so they keep their normal behavior. */
 .modal-drag-header {
   cursor: grab;
@@ -1423,7 +1429,7 @@ button:disabled {
 }
 
 /* Small horizontal pill at the top of the drag header. Purely a
-   visual cue — the whole header drags, not just this pill. */
+   visual cue - the whole header drags, not just this pill. */
 .modal-drag-grip {
   position: absolute;
   top: 7px;
@@ -1584,7 +1590,7 @@ button:disabled {
 }
 
 /* Title input: a free-form headline that anchors the modal, not a boxed
-   form input. No box border — just a soft underline that brightens on
+   form input. No box border - just a soft underline that brightens on
    focus, so it reads as a heading the user happens to type into. */
 .modal-form .title-input {
   border: none;
@@ -1609,7 +1615,7 @@ button:disabled {
   font-weight: 400;
 }
 
-/* Quieter borders on the remaining inputs — feels airier. Borders
+/* Quieter borders on the remaining inputs - feels airier. Borders
    deepen on hover for a subtle interactive cue, and become accent on
    focus via the global input:focus rule. */
 .modal-form input:not(.title-input),
@@ -1667,7 +1673,7 @@ button:disabled {
   border-top: 1px solid var(--border);
 }
 
-/* Cancel button inside the modal — neutral, slightly understated. */
+/* Cancel button inside the modal - neutral, slightly understated. */
 .modal-footer button.secondary {
   background: #fff;
   color: var(--fg-soft);
@@ -1710,7 +1716,7 @@ button:disabled {
   color: var(--danger-fg);
 }
 
-/* Conflict (recoverable overlap) — calm warm-cream, not an alarming red.
+/* Conflict (recoverable overlap) - calm warm-cream, not an alarming red.
    Distinct from .danger, which stays reserved for genuine errors. */
 .modal-info.conflict {
   background: rgba(237, 233, 224, 0.55);
@@ -1781,7 +1787,7 @@ button:disabled {
   font-weight: 500;
 }
 
-/* "Use this time" button — neutral by default, blue-tinted on hover so
+/* "Use this time" button - neutral by default, blue-tinted on hover so
    the per-row action reads as inviting without competing with Save. */
 .replacement-option button.secondary {
   flex-shrink: 0;
@@ -2010,7 +2016,7 @@ button:disabled {
   background-position: 0 0;
 }
 
-/* Subtle alternating lanes — every other column slightly cooler. */
+/* Subtle alternating lanes - every other column slightly cooler. */
 .cal-day-col.is-alt {
   background-color: var(--cal-lane-alt);
 }
@@ -2511,25 +2517,79 @@ button:disabled {
   color: var(--accent-strong);
 }
 
-.app-user-control {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
+.app-account {
+  position: relative;
   margin-left: auto;
 }
 
-.app-user-name {
+.app-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--fg-soft);
   font-size: 0.88rem;
   font-weight: 500;
+}
+
+.app-account-trigger:hover:not(:disabled),
+.app-account-trigger[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--accent-softer);
+  color: var(--fg);
+}
+
+.app-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-strong);
+}
+
+.app-account-name {
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-logout-btn {
-  font-size: 0.85rem;
+.app-account-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 20;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-lg);
+  animation: modal-fade-in 120ms ease-out;
+}
+
+.app-account-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fg-soft);
+  font-size: 0.9rem;
+  font-weight: 450;
+  cursor: pointer;
+}
+
+.app-account-menu-item:hover {
+  background: var(--accent-softer);
+  color: var(--fg);
 }
 
 .app-nav-public {

@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/schedule", label: "Schedule" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export default function SiteNav() {
