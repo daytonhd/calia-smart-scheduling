@@ -1,5 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;450;500;600&display=swap');
 
+/* Zodiak display serif - used ONLY for the Calia wordmark (.app-brand).
+   Local woff2 files under /public/fonts/zodiak. Not for body/UI text. */
+@font-face {
+  font-family: 'Zodiak';
+  src: url('/fonts/zodiak/Zodiak-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Zodiak';
+  src: url('/fonts/zodiak/Zodiak-Extrabold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Calia editorial palette (Atoms). Existing token NAMES are preserved so
      the whole stylesheet inherits the new look; only the values changed. */
@@ -138,11 +156,14 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  font-family: var(--font-serif);
-  color: var(--fg);
-  font-size: 1.6rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  /* Zodiak display serif for the wordmark only. Falls back to the serif
+     stack if the local woff2 fails to load. */
+  font-family: 'Zodiak', var(--font-serif);
+  color: #4d6f9f;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.015em;
 }
 
 /* Refined circular logo mark (Atoms) - pure CSS, ring + offset dot. */
@@ -2666,7 +2687,7 @@ button:disabled {
 }
 
 .app-brand-link:hover .app-brand {
-  color: var(--accent-strong);
+  color: #425f89;
 }
 
 .app-account {
