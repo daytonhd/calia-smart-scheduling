@@ -39,6 +39,18 @@ function formatDayTime(iso: string): string {
   });
 }
 
+// Format a stored "HH:MM" 24-hour Daily Rhythm time as a 12-hour clock label,
+// e.g. "07:00" -> "7:00 AM", "23:00" -> "11:00 PM".
+function formatRhythmTime(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 // Naive-local ISO: backend rejects tz-aware datetimes per the MVP time contract.
 function naiveLocalIso(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -256,6 +268,7 @@ function DashboardContent() {
   const [weekEvents, setWeekEvents] = useState<Event[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
   const [balance, setBalance] = useState<ScheduleBalanceResponse | null>(null);
+  const [rhythm, setRhythm] = useState<DailyRhythm | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -271,11 +284,12 @@ function DashboardContent() {
       try {
         // Fetch Schedule Balance first so the week-events query uses the
         // same Mon–Sun window the backend just summarized.
-        const [ev, up, ws, sb] = await Promise.all([
+        const [ev, up, ws, sb, dr] = await Promise.all([
           listEvents({ startTime: start, endTime: end }),
           listEvents({ startTime: upStart, endTime: upEnd }),
           getWeeklySummary(),
           getScheduleBalance(),
+          getDailyRhythm(),
         ]);
         if (cancelled) return;
 
@@ -295,6 +309,7 @@ function DashboardContent() {
         );
         setSummary(ws);
         setBalance(sb);
+        setRhythm(dr);
 
         if (sb) {
           const win = balanceWindowIso(sb);
@@ -338,39 +353,13 @@ function DashboardContent() {
       {loading ? (
         <p className="muted">Loading…</p>
       ) : (
-        <>
-          {/* Full-width weekly overview / AI summary */}
-          <div className="overview-card">
-            <div className="overview-icon" aria-hidden>
-              ✦
-            </div>
-            <div className="overview-content">
-              <h3 className="overview-title">Weekly AI Summary</h3>
-              {summary ? (
-                <>
-                  <p className="overview-text">{summary.generated_text}</p>
-                  <div className="overview-meta">
-                    Week of {summary.week_start} · generated{" "}
-                    {formatDateTime(summary.created_at)}
-                  </div>
-                </>
-              ) : (
-                <p className="overview-text muted">
-                  Generate a weekly summary to see the main patterns, busiest
-                  days, and open capacity for this week.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="page-grid">
-            {/* Main column: Today's Schedule */}
-            <div className="page-main">
-              {/* Schedule Balance */}
-              <div className="card balance-card">
-                <div className="card-header-row">
-                  <h3 className="card-title">Schedule Balance</h3>
-                </div>
+        <div className="dashboard-stack">
+          {/* TOP: open analytics overview (Schedule Balance) */}
+          <section className="analytics-section">
+            <header className="analytics-header">
+              <h2 className="analytics-title">Schedule Balance</h2>
+              <p className="analytics-subtitle">Your week at a glance</p>
+            </header>
 
                 {(() => {
                   const balanceDays = balance?.days ?? [];
@@ -426,9 +415,9 @@ function DashboardContent() {
                   );
                   return (
                     <>
-                      <div className="balance-grid">
+                      <div className="analytics-grid">
                         {/* By Category — doughnut chart */}
-                        <div className="balance-subcard">
+                        <div className="analytics-panel">
                           <div className="balance-subcard-head">
                             <h4 className="balance-subcard-title">
                               By Category
@@ -444,7 +433,7 @@ function DashboardContent() {
                         </div>
 
                         {/* Daily Load — vertical bars with y-axis */}
-                        <div className="balance-subcard">
+                        <div className="analytics-panel">
                           <div className="balance-subcard-head">
                             <h4 className="balance-subcard-title">
                               Daily Load
@@ -506,8 +495,8 @@ function DashboardContent() {
                         </div>
                       </div>
 
-                      {/* Bottom strip: Light–Balanced–Heavy gradient + interpretation */}
-                      <div className="balance-bottom">
+                      {/* Final interpretation: Light–Balanced–Heavy gradient + status */}
+                      <div className="analytics-balance">
                         <div className="balance-gradient">
                           <div className="balance-gradient-labels">
                             <span>Light</span>
@@ -551,15 +540,41 @@ function DashboardContent() {
                     </>
                   );
                 })()}
-              </div>
-            </div>
+          </section>
 
-            {/* Right sidebar */}
-            <aside className="page-side">
+          {/* MIDDLE: Weekly AI Summary — full-width card, content spans width */}
+          <div className="overview-card">
+            <div className="overview-icon" aria-hidden>
+              ✦
+            </div>
+            <div className="overview-content">
+              <h3 className="overview-title">Weekly AI Summary</h3>
+              {summary ? (
+                <>
+                  <p className="overview-text">{summary.generated_text}</p>
+                  <div className="overview-meta">
+                    Week of {summary.week_start} · generated{" "}
+                    {formatDateTime(summary.created_at)}
+                  </div>
+                </>
+              ) : (
+                <p className="overview-text muted">
+                  Generate a weekly summary to see the main patterns, busiest
+                  days, and open capacity for this week.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* BOTTOM: Upcoming (left) + Daily Rhythm column (right) */}
+          <div className="dashboard-bottom-grid">
               {/* Upcoming — carries today's context + the next-seven-days list */}
               <div className="sidebar-card upcoming-card">
                 <div className="sidebar-card-title">
                   <span>Upcoming</span>
+                  <Link href="/schedule" className="link">
+                    View full schedule →
+                  </Link>
                 </div>
 
                 <div className="upcoming-context">
@@ -593,55 +608,82 @@ function DashboardContent() {
                     ))}
                   </ul>
                 )}
-
-                <Link href="/schedule" className="upcoming-link">
-                  View full schedule →
-                </Link>
               </div>
 
-              {/* Daily Rhythm */}
-              <div className="sidebar-card rhythm-card">
-                <div className="sidebar-card-title">
-                  <span>Daily Rhythm</span>
-                </div>
-                <div className="rhythm-rows">
-                  <div className="rhythm-row">
-                    <span className="rhythm-label">
-                      <svg
-                        className="rhythm-label-icon"
-                        viewBox="0 0 24 24"
-                        width="13"
-                        height="13"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        aria-hidden
-                      >
-                        <circle cx="12" cy="12" r="4" />
-                        <path d="M12 3v1.6M12 19.4V21M3 12h1.6M19.4 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M18.4 5.6l-1.1 1.1M6.7 17.3l-1.1 1.1" />
-                      </svg>
-                      Awake hours
-                    </span>
-                    <span className="rhythm-value">7:00 AM – 11:00 PM</span>
+              {/* Daily Rhythm column: read-only summary + schedule navigation */}
+              <div className="rhythm-column">
+                <div className="sidebar-card rhythm-card">
+                  <div className="sidebar-card-title">
+                    <span>Daily Rhythm</span>
+                    <Link
+                      href="/settings"
+                      className="link"
+                      aria-label="Edit Daily Rhythm in settings"
+                    >
+                      Edit rhythm
+                    </Link>
                   </div>
-                  <div className="rhythm-row">
-                    <span className="rhythm-label">Suggestion window</span>
-                    <span className="rhythm-value">8:00 AM – 9:00 PM</span>
-                  </div>
+                  {rhythm ? (
+                    <div className="rhythm-rows">
+                      <div className="rhythm-row">
+                        <span className="rhythm-label">
+                          <svg
+                            className="rhythm-label-icon"
+                            viewBox="0 0 24 24"
+                            width="13"
+                            height="13"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            aria-hidden
+                          >
+                            <circle cx="12" cy="12" r="4" />
+                            <path d="M12 3v1.6M12 19.4V21M3 12h1.6M19.4 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M18.4 5.6l-1.1 1.1M6.7 17.3l-1.1 1.1" />
+                          </svg>
+                          Awake hours
+                        </span>
+                        <span className="rhythm-value">
+                          {formatRhythmTime(rhythm.awake_start_time)} –{" "}
+                          {formatRhythmTime(rhythm.awake_end_time)}
+                        </span>
+                      </div>
+                      <div className="rhythm-row">
+                        <span className="rhythm-label">Suggestions use</span>
+                        <span className="rhythm-value">
+                          {formatRhythmTime(rhythm.suggestions_start_time)} –{" "}
+                          {formatRhythmTime(rhythm.suggestions_end_time)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="rhythm-empty muted">
+                      Set your daily rhythm in Settings.
+                    </p>
+                  )}
                 </div>
-                <Link
-                  href="/settings"
-                  className="rhythm-edit-btn"
-                  aria-label="Edit Daily Rhythm in settings"
-                >
-                  Edit rhythm
+
+                <Link href="/schedule" className="dashboard-schedule-link">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <rect x="3" y="4.5" width="18" height="16" rx="2" />
+                    <path d="M3 9h18M8 3v3M16 3v3" />
+                  </svg>
+                  View full schedule
                 </Link>
               </div>
-            </aside>
+            </div>
           </div>
-        </>
-      )}
+        )}
     </section>
   );
 }

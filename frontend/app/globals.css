@@ -323,7 +323,8 @@ a:hover {
   white-space: pre-wrap;
   font-size: 0.95rem;
   line-height: 1.55;
-  max-width: 64ch;
+  /* Summary content spans the full card width (no side suggestions column). */
+  max-width: none;
 }
 
 .overview-meta {
@@ -2503,6 +2504,157 @@ button:disabled {
 .rhythm-note {
   margin: 0.55rem 0 0;
   text-align: center;
+}
+
+/* ---------- Dashboard layout: open analytics + bottom grid ---------- */
+
+/* Vertical rhythm between the three dashboard regions
+   (analytics overview → weekly summary → bottom grid). */
+.dashboard-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.85rem;
+}
+
+/* The weekly-summary card lives inside the stack now, so the stack gap owns
+   the spacing below it. */
+.dashboard-stack > .overview-card {
+  margin-bottom: 0;
+}
+
+/* Open top analytics section - no heavy wrapping card. Panels sit on the
+   page surface and are separated by light hairline dividers. */
+.analytics-header {
+  margin-bottom: 1.35rem;
+}
+
+.analytics-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--fg);
+}
+
+.analytics-subtitle {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* By Category | Daily Load - stacked on narrow widths; side by side with a
+   vertical hairline divider on wider desktop. */
+.analytics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.analytics-panel {
+  min-width: 0;
+}
+
+.analytics-grid > .analytics-panel + .analytics-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+@media (min-width: 760px) {
+  .analytics-grid {
+    flex-direction: row;
+    gap: 0;
+  }
+  .analytics-grid > .analytics-panel {
+    flex: 1 1 0;
+  }
+  .analytics-grid > .analytics-panel:first-child {
+    padding-right: 1.85rem;
+  }
+  .analytics-grid > .analytics-panel + .analytics-panel {
+    border-top: none;
+    padding-top: 0;
+    border-left: 1px solid var(--border);
+    padding-left: 1.85rem;
+  }
+}
+
+/* Final interpretation: Light->Balanced->Heavy bar + status sentence.
+   Open (no box), divided from the charts above by a hairline. */
+.analytics-balance {
+  margin-top: 1.6rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+@media (min-width: 721px) {
+  .analytics-balance {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+/* Bottom region: Upcoming (left) + Daily Rhythm column (right). */
+.dashboard-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 860px) {
+  .dashboard-bottom-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.rhythm-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.rhythm-empty {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Full-width navigation control under Daily Rhythm - navigation only,
+   reuses the existing /schedule route. */
+.dashboard-schedule-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-control);
+  background: var(--card-bg);
+  color: var(--accent-deep);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-sizing: border-box;
+  box-shadow: var(--shadow-card);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.dashboard-schedule-link:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+
+.dashboard-schedule-link svg {
+  flex-shrink: 0;
 }
 
 /* ---------- Header: brand link, user control, public nav ---------- */
