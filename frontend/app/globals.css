@@ -1,7 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;450;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;450;500;600&display=swap');
 
-/* Zodiak display serif - used ONLY for the Calia wordmark (.app-brand).
-   Local woff2 files under /public/fonts/zodiak. Not for body/UI text. */
+/* Local Zodiak serif for the Calia wordmark and selective editorial titles. */
+@font-face {
+  font-family: 'Zodiak';
+  src: url('/fonts/zodiak/Zodiak-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Zodiak';
+  src: url('/fonts/zodiak/Zodiak-Variable.woff2') format('woff2');
+  font-weight: 500 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Zodiak';
   src: url('/fonts/zodiak/Zodiak-Bold.woff2') format('woff2');
@@ -10,35 +25,42 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Zodiak';
-  src: url('/fonts/zodiak/Zodiak-Extrabold.woff2') format('woff2');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
   /* Calia editorial palette (Atoms). Existing token NAMES are preserved so
      the whole stylesheet inherits the new look; only the values changed. */
 
-  /* Warm paper neutrals */
-  --bg: #f5f4f0;            /* warm off-white paper canvas */
-  --fg: #2c2e2b;            /* primary ink */
-  --fg-soft: #5a5c58;       /* secondary text */
-  --muted: #8a8c88;         /* tertiary / captions */
-  --border: #e8e6e1;        /* default hairline */
-  --border-strong: #d9d4cb; /* deeper border (warm sand) */
-  --card-bg: #ffffff;
+  /* Canonical text colors (Atoms type system). Legacy --fg/--fg-soft/--muted
+     are kept below as aliases so the whole stylesheet inherits the new ink. */
+  --text-heading: #252927;   /* serif titles - strongest ink */
+  --text-primary: #303432;   /* body + emphasized values */
+  --text-secondary: #5f6764; /* subtitles, descriptions */
+  --text-muted: #7d8581;     /* captions, metadata, helper, chart labels */
+  --text-subtle: #a3aaa6;    /* placeholder text */
+  --text-disabled: #b8beb9;  /* disabled text */
+
+  /* Surfaces & borders - subtle warm paper. */
+  --surface: #fbfaf6;        /* page canvas */
+  --surface-card: #fffefa;   /* raised cards */
+  --surface-muted: #f3f1eb;  /* quiet panels / input fills */
+  --border-subtle: #e5e1d8;  /* default hairline */
+
+  /* Warm paper neutrals (legacy names -> mapped onto the tokens above) */
+  --bg: var(--surface);     /* warm off-white paper canvas */
+  --fg: var(--text-heading);
+  --fg-soft: var(--text-secondary);
+  --muted: var(--text-muted);
+  --border: var(--border-subtle);
+  --border-strong: #d6d1c7; /* deeper border (warm sand) */
+  --card-bg: var(--surface-card);
 
   /* Cool muted blue-gray accent */
   --accent: #8a9baa;        /* muted blue-gray */
   --accent-strong: #6b7d8d; /* deep accent - primary buttons, links */
   --accent-soft: #e8edf1;   /* accent wash - soft fills */
-  --accent-softer: #f8f7f4; /* panel / low-noise input surface */
+  --accent-softer: var(--surface-muted); /* panel / low-noise input surface */
 
   /* Warm, calm error (not a harsh red) */
-  --danger-fg: #a8554a;
+  --danger-fg: #a4514d;
   --danger-bg: #f7efe9;
   --danger-border: #e7d4c9;
   --warn-soft: #ede9e0;     /* warm cream (conflict surfaces) */
@@ -46,13 +68,12 @@
   --shadow-card: 0 1px 2px rgba(44, 46, 43, 0.03), 0 1px 4px rgba(44, 46, 43, 0.04);
   --radius-card: 14px;
   --radius-control: 6px;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: 'Cormorant Garamond', "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: 'Zodiak', Georgia, serif;
 
   /* ---- Additive Atoms tokens (full palette for component refinements) ---- */
   --bg-panel: #f8f7f4;
   --text-tertiary: #8a8c88;
-  --text-muted: #a8aaa6;
   --border-light: #f0eeea;
   --border-accent: #d4dee5;
   --accent-deep: #6b7d8d;
@@ -82,9 +103,8 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  color: var(--fg);
+  color: var(--text-primary);
   line-height: 1.55;
-  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -98,6 +118,8 @@ html {
 
 body {
   background: transparent;
+  font-size: 15px;
+  font-weight: 400;
 }
 
 /* Subtle paper grain - inline SVG feTurbulence, no external asset.
@@ -143,8 +165,10 @@ a:hover {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #ffffff;
-  border-bottom: 1px solid var(--border);
+  /* Same warm canvas color as the page so the header dissolves into the
+     background - no border, shadow, or surface tint that would box it off.
+     The active nav underline alone carries navigation state. */
+  background: var(--bg);
   padding: 1rem 2rem;
   display: flex;
   align-items: center;
@@ -152,12 +176,9 @@ a:hover {
 }
 
 .app-brand {
-  margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  /* Zodiak display serif for the wordmark only. Falls back to the serif
-     stack if the local woff2 fails to load. */
   font-family: 'Zodiak', var(--font-serif);
   color: #4d6f9f;
   font-size: 1.7rem;
@@ -191,9 +212,12 @@ a:hover {
   display: inline-flex;
   align-items: center;
   padding: 0.35rem 0.1rem;
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 400;
+  font-family: var(--font-sans);
+  color: var(--fg-soft);
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
   border-bottom: 1.5px solid transparent;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -203,8 +227,8 @@ a:hover {
 }
 
 .app-nav a.active {
-  color: var(--fg);
-  font-weight: 450;
+  color: var(--text-primary);
+  font-weight: 500;
   border-bottom-color: var(--accent);
 }
 
@@ -222,17 +246,20 @@ a:hover {
 .page-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 2.25rem;
+  font-size: 30px;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
   color: var(--fg);
   line-height: 1.15;
 }
 
 .page-subtitle {
   margin: 0.4rem 0 0 0;
-  color: var(--muted);
-  font-size: 0.95rem;
+  font-family: var(--font-sans);
+  color: var(--fg-soft);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .muted {
@@ -240,7 +267,7 @@ a:hover {
 }
 
 .small {
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 /* ---------- Card primitive ---------- */
@@ -255,10 +282,10 @@ a:hover {
 .card-title {
   margin: 0 0 1rem 0;
   font-family: var(--font-serif);
-  font-size: 1.5rem;
+  font-size: 19px;
   font-weight: 500;
+  line-height: 1.25;
   color: var(--fg);
-  letter-spacing: -0.01em;
 }
 
 .card-section+.card-section {
@@ -281,17 +308,18 @@ a:hover {
 
 .sidebar-card-title {
   margin: 0 0 0.85rem 0;
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 500;
-  letter-spacing: -0.005em;
-  color: var(--fg);
+  line-height: 1.35;
+  color: var(--text-primary);
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 
 .sidebar-card-title .link {
+  font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--accent-strong);
@@ -332,9 +360,9 @@ a:hover {
 .overview-title {
   margin: 0 0 0.35rem 0;
   font-family: var(--font-serif);
-  font-size: 1.25rem;
+  font-size: 19px;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  line-height: 1.25;
   color: var(--fg);
 }
 
@@ -351,7 +379,8 @@ a:hover {
 .overview-meta {
   margin-top: 0.55rem;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 /* ---------- 2-column page grid ---------- */
@@ -454,7 +483,7 @@ a:hover {
 }
 
 .timeline-event-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
   font-size: 0.95rem;
 }
@@ -485,7 +514,7 @@ a:hover {
 .empty-state-strong {
   display: block;
   color: var(--fg-soft);
-  font-weight: 600;
+  font-weight: 500;
   margin-bottom: 0.25rem;
   font-size: 0.92rem;
 }
@@ -548,17 +577,20 @@ a:hover {
 }
 
 .row-title {
-  font-size: 0.9rem;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 500;
-  color: var(--fg);
-  line-height: 1.3;
+  color: var(--text-primary);
+  line-height: 1.35;
   margin: 0 0 0.1rem 0;
   word-break: break-word;
 }
 
 .row-meta {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 /* ---------- Metric rows ---------- */
@@ -573,7 +605,7 @@ a:hover {
   align-items: baseline;
   padding: 0.45rem 0;
   border-top: 1px solid var(--border);
-  font-size: 0.92rem;
+  font-size: 15px;
 }
 
 .metric-row:first-child {
@@ -582,12 +614,14 @@ a:hover {
 }
 
 .metric-row .metric-label {
+  font-family: var(--font-sans);
   color: var(--muted);
 }
 
 .metric-row .metric-value {
   font-weight: 500;
-  color: var(--fg);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Forms / controls ---------- */
@@ -600,18 +634,21 @@ input[type="datetime-local"],
 select,
 textarea {
   font: inherit;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.3;
   padding: 0.5rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--accent-softer);
-  color: var(--fg);
+  color: var(--text-primary);
   outline: none;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--text-subtle);
 }
 
 input:focus,
@@ -623,13 +660,17 @@ textarea:focus {
 
 button {
   font: inherit;
+  font-family: var(--font-sans);
   padding: 0.5rem 0.95rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: #fff;
   color: var(--fg);
   cursor: pointer;
-  font-weight: 450;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
   transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 
@@ -642,6 +683,7 @@ button.primary {
   background: var(--accent-deep);
   color: #fff;
   border-color: var(--accent-deep);
+  font-weight: 600;
 }
 
 button[type="submit"]:hover:not(:disabled),
@@ -708,11 +750,11 @@ button:disabled {
 .toolbar-form label {
   display: flex;
   flex-direction: column;
-  font-size: 0.8rem;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
   gap: 0.3rem;
 }
 
@@ -731,7 +773,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .calendar-filter select {
@@ -764,7 +806,7 @@ button:disabled {
 .day-card-header h3 {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
 }
 
@@ -800,7 +842,7 @@ button:disabled {
 }
 
 .day-event-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
   font-size: 0.95rem;
   margin: 0;
@@ -842,7 +884,7 @@ button:disabled {
 .cta-card h3 {
   margin: 0 0 0.25rem 0;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
 }
 
@@ -909,7 +951,9 @@ button:disabled {
 .event-form label {
   display: flex;
   flex-direction: column;
-  font-size: 0.85rem;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
   color: var(--muted);
   gap: 0.3rem;
 }
@@ -970,9 +1014,9 @@ button:disabled {
 
 .settings-empty-title {
   font-family: var(--font-serif);
-  font-size: 1.1rem;
+  font-size: 19px;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  line-height: 1.25;
   color: var(--fg);
 }
 
@@ -1004,9 +1048,9 @@ button:disabled {
 .schedule-empty-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.2rem;
+  font-size: 19px;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  line-height: 1.25;
   color: var(--fg);
 }
 
@@ -1056,14 +1100,16 @@ button:disabled {
 }
 
 .category-chart-center-num {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 1.05rem;
   font-weight: 500;
-  fill: var(--fg);
+  fill: var(--text-primary);
 }
 
 .category-chart-center-label {
-  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
   fill: var(--muted);
 }
 
@@ -1083,7 +1129,9 @@ button:disabled {
   grid-template-columns: 12px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
   color: var(--fg-soft);
 }
 
@@ -1145,7 +1193,9 @@ button:disabled {
 /* Daily Rhythm form (Settings) - caption + paired time inputs. */
 .rhythm-field-label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
   color: var(--muted);
   margin-bottom: 0.3rem;
 }
@@ -1160,38 +1210,41 @@ button:disabled {
 .settings-page > h2 {
   margin: 0 0 0.3rem;
   font-family: var(--font-serif);
-  font-size: 1.95rem;
+  font-size: 30px;
   font-weight: 500;
-  letter-spacing: -0.02em;
+  line-height: 1.15;
+  letter-spacing: 0.005em;
   color: var(--fg);
 }
 
 .settings-page > h2 + .muted {
   margin: 0 0 1.75rem;
-  font-size: 0.95rem;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .settings-page > h3 {
   margin: 2.5rem 0 0.25rem;
   padding-bottom: 0.55rem;
   border-bottom: 1px solid var(--border);
-  font-family: var(--font-serif);
-  font-size: 1.45rem;
+  font-family: var(--font-sans);
+  font-size: 18px;
   font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--fg);
+  line-height: 1.35;
+  color: var(--text-primary);
 }
 
 .settings-page > h3 + .muted {
   margin: 0 0 1rem;
-  font-size: 0.9rem;
+  font-size: 14px;
+  line-height: 1.45;
   max-width: 60ch;
 }
 
 .settings-page h4 {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -1213,6 +1266,14 @@ button:disabled {
 
 .settings-page .event-list li:last-child {
   border: 1px solid var(--border-light);
+}
+
+/* List row title - sans, a touch heavier so rows don't read as plain. */
+.settings-page .event-row strong {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-primary);
 }
 
 /* Success counterpart to .error-box - same shape, accent palette. */
@@ -1316,6 +1377,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   font: inherit;
+  font-family: var(--font-sans);
   padding: 0.45rem 0.85rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
@@ -1535,14 +1597,15 @@ button:disabled {
 .modal-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.55rem;
+  font-size: 26px;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  line-height: 1.2;
   color: var(--fg);
 }
 
 .modal-subtitle {
   margin: 0.25rem 0 0 0;
+  font-family: var(--font-sans);
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -1578,6 +1641,7 @@ button:disabled {
   padding: 0.85rem 1.5rem 1rem;
   overflow-y: auto;
   overflow-x: hidden;
+  font-family: var(--font-sans);
 }
 
 .modal-footer {
@@ -1589,6 +1653,7 @@ button:disabled {
   gap: 0.5rem;
   border-top: 1px solid var(--border);
   background: #fff;
+  font-family: var(--font-sans);
 }
 
 /* Form layout used inside the modal. */
@@ -1596,6 +1661,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  font-family: var(--font-sans);
 }
 
 .modal-form .form-field {
@@ -1606,8 +1672,9 @@ button:disabled {
 }
 
 .modal-form .form-field > label {
-  font-size: 0.76rem;
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.025em;
   color: var(--muted);
 }
 
@@ -1619,11 +1686,12 @@ button:disabled {
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: transparent;
-  font-size: 1.3rem;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 400;
   padding: 0.4rem 0 0.55rem;
-  color: var(--fg);
-  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  letter-spacing: 0;
   transition: border-color 120ms ease;
 }
 
@@ -1633,7 +1701,7 @@ button:disabled {
 }
 
 .modal-form .title-input::placeholder {
-  color: var(--muted);
+  color: var(--text-subtle);
   font-weight: 400;
 }
 
@@ -1673,6 +1741,7 @@ button:disabled {
 .modal-form input,
 .modal-form select,
 .modal-form textarea {
+  font-family: var(--font-sans);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -1713,6 +1782,7 @@ button:disabled {
   align-items: flex-start;
   gap: 0.55rem;
   padding: 0.7rem 0.85rem;
+  font-family: var(--font-sans);
   background: var(--accent-soft);
   border: 1px solid var(--border-accent);
   border-radius: var(--r-md);
@@ -1722,7 +1792,7 @@ button:disabled {
 
 .modal-info-icon {
   flex-shrink: 0;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -1748,6 +1818,7 @@ button:disabled {
 
 .modal-info.conflict strong {
   color: var(--fg);
+  font-weight: 500;
 }
 
 .modal-info.conflict .modal-info-icon {
@@ -1800,7 +1871,7 @@ button:disabled {
 }
 
 .replacement-option-date {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fg);
 }
 
@@ -1887,6 +1958,7 @@ button:disabled {
 }
 
 .cal-panel {
+  font-family: var(--font-sans);
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -1921,7 +1993,7 @@ button:disabled {
   align-items: center;
   justify-content: flex-end;
   padding: 0.5rem 0.55rem 0.5rem 0;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -1951,8 +2023,8 @@ button:disabled {
 }
 
 .cal-day-weekday {
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2018,7 +2090,8 @@ button:disabled {
   position: absolute;
   right: 0.55rem;
   transform: translateY(-50%);
-  font-size: 0.72rem;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
   letter-spacing: 0.01em;
@@ -2100,17 +2173,19 @@ button:disabled {
 }
 
 .cal-event-title {
-  font-weight: 600;
-  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 13px;
   line-height: 1.2;
-  color: var(--fg);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .cal-event-time {
-  font-size: 0.72rem;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2118,7 +2193,8 @@ button:disabled {
 }
 
 .cal-event-meta {
-  font-size: 0.7rem;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2184,10 +2260,11 @@ button:disabled {
 
 .balance-subcard-title {
   margin: 0;
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 500;
-  color: var(--fg);
+  line-height: 1.35;
+  color: var(--text-primary);
 }
 
 .balance-subcard-sub {
@@ -2211,7 +2288,9 @@ button:disabled {
 }
 
 .capacity-day {
+  font-family: var(--font-sans);
   font-size: 0.78rem;
+  font-weight: 400;
   color: var(--muted);
 }
 
@@ -2240,7 +2319,9 @@ button:disabled {
   justify-content: space-between;
   margin-top: 0.5rem;
   padding-left: calc(2.2rem + 0.55rem);
+  font-family: var(--font-sans);
   font-size: 0.7rem;
+  font-weight: 400;
   color: var(--muted);
 }
 
@@ -2257,7 +2338,9 @@ button:disabled {
   flex-direction: column;
   justify-content: space-between;
   align-items: flex-end;
-  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
   color: var(--muted);
 }
 
@@ -2326,7 +2409,9 @@ button:disabled {
   gap: 0.3rem;
   margin-top: 0.35rem;
   margin-left: calc(1.3rem + 0.4rem);
-  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
   color: var(--muted);
   text-align: center;
 }
@@ -2353,7 +2438,9 @@ button:disabled {
 .balance-gradient-labels {
   display: flex;
   justify-content: space-between;
+  font-family: var(--font-sans);
   font-size: 0.75rem;
+  font-weight: 400;
   color: var(--muted);
   margin-bottom: 0.45rem;
 }
@@ -2390,11 +2477,10 @@ button:disabled {
 }
 
 .balance-interpretation-label {
-  font-family: var(--font-serif);
-  font-size: 1.9rem;
+  font-family: var(--font-sans);
+  font-size: 26px;
   font-weight: 400;
-  font-style: italic;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   line-height: 1.1;
   margin-bottom: 0.4rem;
   color: var(--fg);
@@ -2452,9 +2538,10 @@ button:disabled {
 }
 
 .upcoming-today {
+  font-family: var(--font-sans);
   font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--fg);
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .upcoming-link {
@@ -2552,17 +2639,19 @@ button:disabled {
 .analytics-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.65rem;
+  font-size: 30px;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
   line-height: 1.15;
   color: var(--fg);
 }
 
 .analytics-subtitle {
   margin: 0.2rem 0 0;
-  color: var(--muted);
-  font-size: 0.9rem;
+  font-family: var(--font-sans);
+  color: var(--fg-soft);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 /* By Category | Daily Load - stacked on narrow widths; side by side with a
@@ -2705,7 +2794,7 @@ button:disabled {
   background: transparent;
   color: var(--fg-soft);
   font-size: 0.88rem;
-  font-weight: 500;
+  font-weight: 450;
 }
 
 .app-account-trigger:hover:not(:disabled),
@@ -2774,7 +2863,7 @@ button:disabled {
   padding: 0.45rem 0.85rem;
   color: var(--fg-soft);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 450;
   border-radius: var(--radius-control);
 }
 
@@ -2931,9 +3020,9 @@ button:disabled {
 }
 
 .preview-card-eyebrow {
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -2954,7 +3043,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .preview-bars {
@@ -2973,7 +3062,7 @@ button:disabled {
 .preview-bar-day {
   font-size: 0.75rem;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -3016,7 +3105,7 @@ button:disabled {
 
 .preview-event-time {
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.78rem;
 }
 
@@ -3037,7 +3126,7 @@ button:disabled {
 .preview-event-warn {
   font-size: 0.7rem;
   color: #a8754a;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -3125,11 +3214,11 @@ button:disabled {
 }
 
 .auth-field-label {
-  font-size: 0.78rem;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .auth-field input {
