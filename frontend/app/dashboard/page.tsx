@@ -60,15 +60,6 @@ function naiveLocalIso(d: Date): string {
   );
 }
 
-// Returns [startOfToday, startOfTomorrow] as naive local ISO strings.
-function todayWindowIso(): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start: naiveLocalIso(start), end: naiveLocalIso(end) };
-}
-
 // Returns the window from start of tomorrow through end of day (today + 7).
 function upcomingWindowIso(): { start: string; end: string } {
   const now = new Date();
@@ -263,7 +254,6 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const [todayEvents, setTodayEvents] = useState<Event[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [weekEvents, setWeekEvents] = useState<Event[]>([]);
   const [summary, setSummary] = useState<ScheduleSummary | null>(null);
@@ -276,7 +266,6 @@ function DashboardContent() {
     let cancelled = false;
 
     async function load() {
-      const { start, end } = todayWindowIso();
       const { start: upStart, end: upEnd } = upcomingWindowIso();
 
       setLoading(true);
@@ -284,8 +273,7 @@ function DashboardContent() {
       try {
         // Fetch Schedule Balance first so the week-events query uses the
         // same Mon–Sun window the backend just summarized.
-        const [ev, up, ws, sb, dr] = await Promise.all([
-          listEvents({ startTime: start, endTime: end }),
+        const [up, ws, sb, dr] = await Promise.all([
           listEvents({ startTime: upStart, endTime: upEnd }),
           getWeeklySummary(),
           getScheduleBalance(),
@@ -293,13 +281,6 @@ function DashboardContent() {
         ]);
         if (cancelled) return;
 
-        setTodayEvents(
-          [...ev].sort(
-            (a, b) =>
-              new Date(a.start_time).getTime() -
-              new Date(b.start_time).getTime()
-          )
-        );
         setUpcomingEvents(
           [...up].sort(
             (a, b) =>
@@ -568,20 +549,12 @@ function DashboardContent() {
 
           {/* BOTTOM: Upcoming (left) + Daily Rhythm column (right) */}
           <div className="dashboard-bottom-grid">
-              {/* Upcoming — carries today's context + the next-seven-days list */}
               <div className="sidebar-card upcoming-card">
                 <div className="sidebar-card-title">
-                  <span>Upcoming</span>
+                  <span>Upcoming Events</span>
                   <Link href="/schedule" className="link">
                     View full schedule →
                   </Link>
-                </div>
-
-                <div className="upcoming-context">
-                  <span className="upcoming-today">
-                    Today · {todayEvents.length} event
-                    {todayEvents.length === 1 ? "" : "s"}
-                  </span>
                 </div>
 
                 {upcomingEvents.length === 0 ? (

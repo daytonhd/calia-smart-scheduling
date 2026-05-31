@@ -34,7 +34,41 @@ interface CategoryFormState {
   color: string;
 }
 
-const EMPTY_CALENDAR_FORM: CalendarFormState = { name: "", color: "" };
+const CALENDAR_COLOR_OPTIONS = [
+  "#9b8cc8",
+  "#8da7be",
+  "#d8a15f",
+  "#c97c5d",
+  "#a7b88c",
+  "#d88ca4",
+  "#7f95a8",
+  "#b59b7b",
+  "#8fb7a5",
+  "#c4a1d8",
+  "#da815f",
+  "#6f8798",
+];
+
+const DEFAULT_CALENDAR_COLOR = CALENDAR_COLOR_OPTIONS[0];
+const SAFE_NAMED_CALENDAR_COLORS = new Set([
+  "black",
+  "blue",
+  "gray",
+  "green",
+  "grey",
+  "orange",
+  "pink",
+  "purple",
+  "red",
+  "teal",
+  "white",
+  "yellow",
+]);
+
+const EMPTY_CALENDAR_FORM: CalendarFormState = {
+  name: "",
+  color: DEFAULT_CALENDAR_COLOR,
+};
 const EMPTY_CATEGORY_FORM: CategoryFormState = { name: "", color: "" };
 
 // Daily Rhythm starting values - only shown until the backend responds.
@@ -73,6 +107,14 @@ function validateRhythm(r: DailyRhythm): string | null {
   return null;
 }
 
+function safeDisplayColor(color: string): string {
+  const value = color.trim();
+  if (!value) return DEFAULT_CALENDAR_COLOR;
+  if (/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(value)) return value;
+  if (SAFE_NAMED_CALENDAR_COLORS.has(value.toLowerCase())) return value;
+  return DEFAULT_CALENDAR_COLOR;
+}
+
 export default function SettingsPage() {
   return (
     <RequireAuth>
@@ -92,6 +134,8 @@ function SettingsContent() {
   const [calendarSubmitting, setCalendarSubmitting] = useState<boolean>(false);
   const [calendarsError, setCalendarsError] = useState<string | null>(null);
   const [calendarFormError, setCalendarFormError] = useState<string | null>(null);
+  const [calendarColorPickerOpen, setCalendarColorPickerOpen] =
+    useState<boolean>(false);
 
   // ----- Categories -----
   const [categories, setCategories] = useState<Category[]>([]);
@@ -200,6 +244,7 @@ function SettingsContent() {
     setCalendarForm(EMPTY_CALENDAR_FORM);
     setEditingCalendarId(null);
     setCalendarFormError(null);
+    setCalendarColorPickerOpen(false);
     setCalendarFormVisible(false);
   }
 
@@ -207,13 +252,15 @@ function SettingsContent() {
     setCalendarForm(EMPTY_CALENDAR_FORM);
     setEditingCalendarId(null);
     setCalendarFormError(null);
+    setCalendarColorPickerOpen(false);
     setCalendarFormVisible(true);
   }
 
   function startEditCalendar(c: Calendar) {
     setEditingCalendarId(c.id);
     setCalendarFormError(null);
-    setCalendarForm({ name: c.name, color: c.color ?? "" });
+    setCalendarForm({ name: c.name, color: c.color ?? DEFAULT_CALENDAR_COLOR });
+    setCalendarColorPickerOpen(false);
     setCalendarFormVisible(true);
   }
 
@@ -229,7 +276,7 @@ function SettingsContent() {
 
     const payload: CalendarCreate = {
       name,
-      color: calendarForm.color.trim() || null,
+      color: calendarForm.color.trim() || DEFAULT_CALENDAR_COLOR,
     };
 
     setCalendarSubmitting(true);
@@ -362,17 +409,68 @@ function SettingsContent() {
               />
             </label>
 
-            <label>
-              Color
-              <input
-                type="text"
-                value={calendarForm.color}
-                onChange={(e) =>
-                  setCalendarForm((f) => ({ ...f, color: e.target.value }))
-                }
-                placeholder="#2563eb or blue"
-              />
-            </label>
+            <div className="color-picker-field">
+              <span className="color-picker-label">Color</span>
+              <button
+                type="button"
+                className="color-picker-trigger"
+                aria-expanded={calendarColorPickerOpen}
+                aria-controls="calendar-color-picker"
+                onClick={() => setCalendarColorPickerOpen((open) => !open)}
+              >
+                <span
+                  className="color-swatch"
+                  style={{
+                    backgroundColor: safeDisplayColor(calendarForm.color),
+                  }}
+                  aria-hidden="true"
+                />
+                <span>Choose color</span>
+              </button>
+
+              {calendarColorPickerOpen && (
+                <div
+                  id="calendar-color-picker"
+                  className="color-picker-popover"
+                  role="dialog"
+                  aria-label="Choose calendar color"
+                >
+                  <div className="color-picker-header">
+                    <strong>Choose calendar color</strong>
+                    <button
+                      type="button"
+                      className="color-picker-close"
+                      onClick={() => setCalendarColorPickerOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="color-picker-grid">
+                    {CALENDAR_COLOR_OPTIONS.map((color) => {
+                      const selected =
+                        calendarForm.color.trim().toLowerCase() ===
+                        color.toLowerCase();
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`color-option${
+                            selected ? " is-selected" : ""
+                          }`}
+                          style={{ backgroundColor: color }}
+                          aria-label={`Select ${color}`}
+                          aria-pressed={selected}
+                          onClick={() => {
+                            setCalendarForm((f) => ({ ...f, color }));
+                            setCalendarColorPickerOpen(false);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {calendarFormError && (
               <div className="error-box full" role="alert">
@@ -436,7 +534,16 @@ function SettingsContent() {
             {calendars.map((c) => (
               <li key={c.id} className="event-row">
                 <div>
-                  <strong>{c.name}</strong>
+                  <span className="category-row-name">
+                    {c.color && (
+                      <span
+                        className="color-swatch"
+                        style={{ backgroundColor: safeDisplayColor(c.color) }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <strong>{c.name}</strong>
+                  </span>
                   {c.color && (
                     <span className="muted">, color {c.color}</span>
                   )}

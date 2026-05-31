@@ -122,18 +122,30 @@ function formatShortDate(iso: string): string {
   });
 }
 
-// Format a bare "YYYY-MM-DD" date (e.g. WeeklyMetrics.busiest_day) as
-// "Weekday, MM/DD". Built from local date parts so the displayed
-// weekday matches the calendar day regardless of timezone.
+function formatScheduledMinutes(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.floor(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (hours === 0) return `${remainder}m`;
+  if (remainder === 0) return `${hours}h`;
+  return `${hours}h ${remainder}m`;
+}
+
 function formatBusiestDay(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return iso;
+
   const y = Number(m[1]);
   const mo = Number(m[2]);
   const d = Number(m[3]);
   const date = new Date(y, mo - 1, d);
-  const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
-  return `${weekday}, ${pad(mo)}/${pad(d)}`;
+
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatHourLabel(h: number): string {
@@ -1793,9 +1805,9 @@ function ScheduleContent() {
                   <span className="metric-value">{metrics.total_events}</span>
                 </div>
                 <div className="metric-row">
-                  <span className="metric-label">Scheduled minutes</span>
+                  <span className="metric-label">Scheduled time</span>
                   <span className="metric-value">
-                    {metrics.total_scheduled_minutes}
+                    {formatScheduledMinutes(metrics.total_scheduled_minutes)}
                   </span>
                 </div>
                 <div className="metric-row">
